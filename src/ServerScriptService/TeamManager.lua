@@ -55,17 +55,31 @@ function TeamManager.AssignTeam(player)
 end
 
 function TeamManager.GetSpawnLocation(player)
-	-- 맵의 양 끝을 각 팀의 스폰 지점으로 설정
+	-- 맵 가장자리에서 스폰하되, 중앙(건물) 방향을 바라보도록 설정
 	local mapSize = Config.Map.Size
-	local spawnOffset = mapSize / 2 - 20
+	local spawnOffset = mapSize / 2 - 25 -- 가장자리에서 약간 안쪽
 	
-	if player.Team.Name == Config.Teams.Red.Name then
-		-- Red Team: 북쪽 (-Z)
-		return CFrame.new(math.random(-20, 20), 5, -spawnOffset)
+	-- 랜덤한 방향 선택 (북/남/동/서)
+	local side = math.random(1, 4)
+	local spawnPos
+	
+	if side == 1 then
+		-- 북쪽 (-Z)
+		spawnPos = Vector3.new(math.random(-20, 20), 5, -spawnOffset)
+	elseif side == 2 then
+		-- 남쪽 (+Z)
+		spawnPos = Vector3.new(math.random(-20, 20), 5, spawnOffset)
+	elseif side == 3 then
+		-- 서쪽 (-X)
+		spawnPos = Vector3.new(-spawnOffset, 5, math.random(-20, 20))
 	else
-		-- Blue Team: 남쪽 (+Z)
-		return CFrame.new(math.random(-20, 20), 5, spawnOffset)
+		-- 동쪽 (+X)
+		spawnPos = Vector3.new(spawnOffset, 5, math.random(-20, 20))
 	end
+	
+	-- 맵 중앙(0,5,0)을 바라보는 CFrame 반환
+	local centerPos = Vector3.new(0, 5, 0)
+	return CFrame.lookAt(spawnPos, centerPos)
 end
 
 return TeamManager

@@ -12,8 +12,9 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 	local handle = Tool:FindFirstChild("Handle")
 	if not handle then return end
 	
-	-- 레이캐스팅 (촬영 대상 확인용)
-	local origin = handle.Position
+	-- 레이캐스팅 (촬영 대상 확인용) - 렌즈 위치에서 시작
+	local lens = handle:FindFirstChild("Lens")
+	local origin = lens and lens.WorldPosition or handle.Position
 	local direction = (targetPosition - origin).Unit
 	
 	local raycastParams = RaycastParams.new()

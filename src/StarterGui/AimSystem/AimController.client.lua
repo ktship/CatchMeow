@@ -56,6 +56,13 @@ warningLabel.Visible = false
 warningLabel.Parent = screenGui
 
 local function onCharacterAdded(char)
+	-- 맵이 로드될 때까지 대기 (고스트 레이저 방지)
+	local map = workspace:WaitForChild("Map", 10)
+	if not map then
+		warn("[AimController] Map not found, skipping aim system")
+		return
+	end
+	
 	local humanoid = char:WaitForChild("Humanoid", 10)
 	local root = char:WaitForChild("HumanoidRootPart", 10)
 	if not humanoid or not root then return end

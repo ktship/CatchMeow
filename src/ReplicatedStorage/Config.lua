@@ -30,7 +30,7 @@ Config.Map = {
 Config.Camera = {
 	Name = "Camera",
 	ShutterSpeed = 0.5, -- 촬영 간격 (초)
-	Range = 50, -- 초점 거리
+	Range = 100, -- 초점 거리
 }
 
 -- 게임 라운드 설정

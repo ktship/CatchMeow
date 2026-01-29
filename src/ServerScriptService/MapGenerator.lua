@@ -81,10 +81,41 @@ function MapGenerator.Generate()
 		end
 	end
 	
-	-- 4. 다리 생성 (중앙을 가로지르는)
+	-- 5. 스폰 위치 생성 (가장자리에서 중앙을 바라보도록)
+	MapGenerator.CreateSpawnLocations(mapFolder, mapSize)
+	
+	-- 6. 다리 생성 (중앙을 가로지르는)
 	MapGenerator.CreateBridge(mapFolder)
 	
 	print("City Map Generated!")
+end
+
+-- 스폰 위치 생성 함수 (도로 위 코너에 배치)
+function MapGenerator.CreateSpawnLocations(parent, mapSize)
+	local halfSize = mapSize / 2
+	-- 도로가 있는 가장자리 코너에 배치 (건물과 겹치지 않음)
+	local cornerOffset = halfSize - 10
+	
+	-- 4개 코너에 스폰 위치 생성 (도로 위)
+	local spawnPositions = {
+		{pos = Vector3.new(-cornerOffset, 1, -cornerOffset), lookAt = Vector3.new(0, 1, 0)}, -- 북서
+		{pos = Vector3.new(cornerOffset, 1, -cornerOffset), lookAt = Vector3.new(0, 1, 0)},  -- 북동
+		{pos = Vector3.new(-cornerOffset, 1, cornerOffset), lookAt = Vector3.new(0, 1, 0)},  -- 남서
+		{pos = Vector3.new(cornerOffset, 1, cornerOffset), lookAt = Vector3.new(0, 1, 0)},   -- 남동
+	}
+	
+	for i, spawnData in ipairs(spawnPositions) do
+		local spawn = Instance.new("SpawnLocation")
+		spawn.Name = "Spawn" .. i
+		spawn.Size = Vector3.new(6, 1, 6)
+		spawn.CFrame = CFrame.lookAt(spawnData.pos, spawnData.lookAt)
+		spawn.Anchored = true
+		spawn.CanCollide = false
+		spawn.Neutral = true -- 모든 플레이어 스폰 가능
+		spawn.Material = Enum.Material.ForceField
+		spawn.Transparency = 0.5
+		spawn.Parent = parent
+	end
 end
 
 function MapGenerator.CreateBuilding(x, y, z, parent)

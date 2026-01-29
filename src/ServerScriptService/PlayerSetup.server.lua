@@ -16,11 +16,7 @@ local TeamManager
 local function onCharacterAdded(player, character)
 	character:WaitForChild("Humanoid")
 	
-	-- 1. 스폰 위치 설정
-	if TeamManager then
-		local spawnCFrame = TeamManager.GetSpawnLocation(player)
-		character:SetPrimaryPartCFrame(spawnCFrame)
-	end
+	-- 스폰 위치는 SpawnLocation 사용 (MapGenerator에서 생성)
 	
 	-- 2. 무기(카메라) 지급
 	local weaponName = Config.Camera.Name

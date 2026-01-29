@@ -87,21 +87,76 @@ function MapGenerator.Generate()
 	-- 6. 다리 생성 (중앙을 가로지르는)
 	MapGenerator.CreateBridge(mapFolder)
 	
+	-- 7. 경계 구역 생성 (위험 지역 + 킬존)
+	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
+	
 	print("City Map Generated!")
 end
 
--- 스폰 위치 생성 함수 (도로 위 코너에 배치)
+-- 경계 구역 생성 함수 (맵 바깥에 경고 구역)
+function MapGenerator.CreateBoundaryZone(parent, mapSize)
+	local halfSize = mapSize / 2
+	local warningWidth = 15 -- 붉은 경고 구역 너비
+	local groundY = 0
+	
+	local boundaryFolder = Instance.new("Folder")
+	boundaryFolder.Name = "Boundary"
+	boundaryFolder.Parent = parent
+	
+	-- 붉은 경고 구역 (맵 바깥쪽 4면)
+	local warningColor = Color3.fromRGB(150, 30, 30)
+	local totalWidth = mapSize + warningWidth -- 경고 구역 포함 전체 너비
+	local warningPositions = {
+		-- 북쪽 (맵 바깥)
+		{pos = Vector3.new(0, groundY + 0.6, -halfSize - warningWidth/2), size = Vector3.new(totalWidth, 0.5, warningWidth)},
+		-- 남쪽 (맵 바깥)
+		{pos = Vector3.new(0, groundY + 0.6, halfSize + warningWidth/2), size = Vector3.new(totalWidth, 0.5, warningWidth)},
+		-- 서쪽 (맵 바깥)
+		{pos = Vector3.new(-halfSize - warningWidth/2, groundY + 0.6, 0), size = Vector3.new(warningWidth, 0.5, mapSize)},
+		-- 동쪽 (맵 바깥)
+		{pos = Vector3.new(halfSize + warningWidth/2, groundY + 0.6, 0), size = Vector3.new(warningWidth, 0.5, mapSize)},
+	}
+	
+	for i, data in ipairs(warningPositions) do
+		local warning = Instance.new("Part")
+		warning.Name = "WarningZone" .. i
+		warning.Size = data.size
+		warning.Position = data.pos
+		warning.Color = warningColor
+		warning.Material = Enum.Material.Neon
+		warning.Transparency = 0.3
+		warning.Anchored = true
+		warning.CanCollide = true -- 플레이어가 밟을 수 있게
+		warning.Parent = boundaryFolder
+		
+		warning:SetAttribute("DamageZone", true)
+	end
+	
+	-- 킬 브릭 (바닥 아래)
+	local killBrick = Instance.new("Part")
+	killBrick.Name = "KillBrick"
+	killBrick.Size = Vector3.new(mapSize * 3, 10, mapSize * 3)
+	killBrick.Position = Vector3.new(0, -100, 0)
+	killBrick.Color = Color3.new(0, 0, 0)
+	killBrick.Transparency = 1
+	killBrick.Anchored = true
+	killBrick.CanCollide = false
+	killBrick.Parent = boundaryFolder
+	killBrick:SetAttribute("KillZone", true)
+end
+
+-- 스폰 위치 생성 함수 (맵 가장자리에 배치)
 function MapGenerator.CreateSpawnLocations(parent, mapSize)
 	local halfSize = mapSize / 2
-	-- 도로가 있는 가장자리 코너에 배치 (건물과 겹치지 않음)
-	local cornerOffset = halfSize - 10
+	-- 맵 가장자리에 배치 (맵 끝에서 3스터드 안쪽)
+	local edgeOffset = halfSize - 3
 	
-	-- 4개 코너에 스폰 위치 생성 (도로 위)
+	-- 4면 가장자리에 스폰 위치 생성 (중앙을 바라봄)
 	local spawnPositions = {
-		{pos = Vector3.new(-cornerOffset, 1, -cornerOffset), lookAt = Vector3.new(0, 1, 0)}, -- 북서
-		{pos = Vector3.new(cornerOffset, 1, -cornerOffset), lookAt = Vector3.new(0, 1, 0)},  -- 북동
-		{pos = Vector3.new(-cornerOffset, 1, cornerOffset), lookAt = Vector3.new(0, 1, 0)},  -- 남서
-		{pos = Vector3.new(cornerOffset, 1, cornerOffset), lookAt = Vector3.new(0, 1, 0)},   -- 남동
+		{pos = Vector3.new(0, 1, -edgeOffset), lookAt = Vector3.new(0, 1, 0)}, -- 북쪽 가장자리
+		{pos = Vector3.new(0, 1, edgeOffset), lookAt = Vector3.new(0, 1, 0)},  -- 남쪽 가장자리
+		{pos = Vector3.new(-edgeOffset, 1, 0), lookAt = Vector3.new(0, 1, 0)}, -- 서쪽 가장자리
+		{pos = Vector3.new(edgeOffset, 1, 0), lookAt = Vector3.new(0, 1, 0)},  -- 동쪽 가장자리
 	}
 	
 	for i, spawnData in ipairs(spawnPositions) do

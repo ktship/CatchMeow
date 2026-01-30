@@ -14,27 +14,34 @@ local TeamManager
 -- 실제로는 GameManager가 이들을 조율하는 것이 좋음
 
 local function giveWeapon(player)
-	local weaponName = Config.Camera.Name
+	-- Give both Camera and Camera2
+	local weaponNames = {"Camera", "Camera2"}
 	
 	-- 비동기로 무기 지급 시도
 	spawn(function()
 		local weaponsFolder = ReplicatedStorage:WaitForChild("Weapons", 30)
 		if not weaponsFolder then return end
 		
-		local weapon = weaponsFolder:WaitForChild(weaponName, 30)
-		if weapon then
-			-- 이미 있는지 확인
-			if player.Backpack:FindFirstChild(weaponName) then return end
-			if player.Character and player.Character:FindFirstChild(weaponName) then return end
-			
-			local newWeapon = weapon:Clone()
-			newWeapon.Parent = player.Backpack
-			
-			if player.Character and player.Character:FindFirstChild("Humanoid") then
-				player.Character.Humanoid:EquipTool(newWeapon)
+		for _, weaponName in ipairs(weaponNames) do
+			local weapon = weaponsFolder:FindFirstChild(weaponName)
+			if weapon then
+				-- 이미 있는지 확인
+				if player.Backpack:FindFirstChild(weaponName) then continue end
+				if player.Character and player.Character:FindFirstChild(weaponName) then continue end
+				
+				local newWeapon = weapon:Clone()
+				newWeapon.Parent = player.Backpack
+				
+				print("[PlayerSetup] " .. weaponName .. " given to " .. player.Name)
+			else
+				warn("[PlayerSetup] " .. weaponName .. " not found in Weapons folder")
 			end
-			print("[PlayerSetup] Weapon given to " .. player.Name)
 		end
+		
+		-- Equip the first one (Optional)
+		-- if player.Character and player.Character:FindFirstChild("Humanoid") then
+		-- 	player.Character.Humanoid:EquipTool(player.Backpack:FindFirstChild("Camera"))
+		-- end
 	end)
 end
 

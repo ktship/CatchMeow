@@ -8,6 +8,10 @@ local Config = require(ReplicatedStorage:WaitForChild("Config"))
 local MapGenerator = require(game.ServerScriptService:WaitForChild("MapGenerator"))
 local TeamManager = require(game.ServerScriptService:WaitForChild("TeamManager"))
 
+-- [Fix] Prevent "Teleport Glitch" (Spawning at 0,0,0 then jumping to spawn)
+-- Disable AutoLoad so we can manually spawn players ONLY after map is ready.
+Players.CharacterAutoLoads = false
+
 -- 상태 값 (클라이언트 표시용)
 local statusValue = ReplicatedStorage:FindFirstChild("GameStatus")
 if not statusValue then
@@ -123,6 +127,17 @@ local function gameLoop()
 		end
 	end
 end
+
+
+
+-- [Fix] Handle Late Joiners
+Players.PlayerAdded:Connect(function(player)
+	-- If game is already running, spawn them
+	if statusValue.Value == "Game in Progress" then
+		wait(1) -- Wait for scripts to load
+		if player then player:LoadCharacter() end
+	end
+end)
 
 -- 루프 시작
 spawn(gameLoop)

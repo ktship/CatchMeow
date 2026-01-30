@@ -20,7 +20,7 @@ local function createPart(name, size, position, color, material, parent)
 end
 
 function MapGenerator.Generate()
-	print("Generating Rural Valley Map with Flat Building Pads & Winding Road...")
+	-- print("Generating Rural Valley Map with Flat Building Pads & Winding Road...")
 
 	-- 기존 맵 초기화
 	local mapFolder = workspace:FindFirstChild("Map")
@@ -208,7 +208,7 @@ function MapGenerator.Generate()
 	-- 경계
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 
-	print("Rural Valley Map Generated!")
+	-- print("Rural Valley Map Generated!")
 end
 -- 가로등 배치
 function MapGenerator.CreateStreetLamps(parent, mapSize, roadWidth, blockSize)
@@ -380,27 +380,31 @@ end
 
 -- 스폰 위치 생성 함수 (마을 중앙 광장 근처)
 function MapGenerator.CreateSpawnLocations(parent, mapSize)
-	-- 중앙 근처 4곳에 배치
-	local offset = 10
-	local spawnY = 8 -- 지형 높이 고려하여 약간 띄움 (레이캐스트 등으로 정확히 할 수도 있음)
+	-- [Modified] Create Single Safe Spawn Point (Off-road)
+	local spawnY = 8
+	local safePos = Vector3.new(-30, spawnY, 0) -- 30 studs West (Avoid Road)
 	
-	local spawnPositions = {
-		{pos = Vector3.new(0, spawnY, -offset), lookAt = Vector3.new(0, spawnY, 0)}, -- 북
-		{pos = Vector3.new(0, spawnY, offset), lookAt = Vector3.new(0, spawnY, 0)},  -- 남
-		{pos = Vector3.new(-offset, spawnY, 0), lookAt = Vector3.new(0, spawnY, 0)}, -- 서
-		{pos = Vector3.new(offset, spawnY, 0), lookAt = Vector3.new(0, spawnY, 0)},  -- 동
-	}
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "MainSpawn"
+	spawn.Size = Vector3.new(6, 1, 6)
+	spawn.CFrame = CFrame.new(safePos)
+	spawn.Anchored = true
+	spawn.CanCollide = false
+	spawn.CanQuery = false
+	spawn.Neutral = true
+	spawn.Transparency = 0.5 -- Keeping visible for verification
+	spawn.Color = Color3.fromRGB(0, 255, 0)
+	spawn.Parent = parent
 	
-	for i, spawnData in ipairs(spawnPositions) do
-		local spawn = Instance.new("SpawnLocation")
-		spawn.Name = "Spawn" .. i
-		spawn.Size = Vector3.new(6, 1, 6)
-		spawn.CFrame = CFrame.lookAt(spawnData.pos, spawnData.lookAt)
-		spawn.Anchored = true
-		spawn.CanCollide = false
-		spawn.Neutral = true
-		spawn.Transparency = 1 -- 투명하게 숨김
-		spawn.Parent = parent
+	-- [Fix] Remove "Tornado/Star" Decal
+	local decal = spawn:FindFirstChildOfClass("Decal")
+	if decal then decal:Destroy() end
+	
+	-- [Fix] Cleanup Stray SpawnLocations in Workspace
+	for _, child in ipairs(workspace:GetChildren()) do
+		if child:IsA("SpawnLocation") and child ~= spawn then
+			child:Destroy()
+		end
 	end
 end
 

@@ -7,6 +7,13 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
+-- 0. Cleanup Old Visuals (Fixes "Ghost Laser" residue)
+-- Since these are local parts, we can safely delete any existing folder.
+local existingFolder = workspace:FindFirstChild("AimVisuals")
+if existingFolder then
+	existingFolder:Destroy()
+end
+
 -- 레이저 시각 효과
 local visualFolder = Instance.new("Folder")
 visualFolder.Name = "AimVisuals"
@@ -42,6 +49,19 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AimInterface"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Cleanup duplicate GUIs
+for _, child in ipairs(player.PlayerGui:GetChildren()) do
+	if child.Name == "AimInterface" and child ~= screenGui then
+		child:Destroy()
+	end
+end
+
+-- Cleanup on Script Destroy (Safety Net)
+script.Destroying:Connect(function()
+	if visualFolder then visualFolder:Destroy() end
+	RunService:UnbindFromRenderStep("AimController")
+end)
 
 local warningLabel = Instance.new("TextLabel")
 warningLabel.Name = "WarningLabel"
@@ -99,6 +119,10 @@ local function onCharacterAdded(char)
 	end
 	
 	if not neck then return end
+	
+	-- [Critical Fix] Filter Character from Mouse Raycast
+	-- Prevents aiming at self/gun which causes weird backward spins
+	mouse.TargetFilter = char
 	
 	local neckC0 = neck.C0
 	local waistC0 = (waist and waist.C0) or CFrame.new()

@@ -23,6 +23,22 @@ if not timerValue then
 	timerValue.Parent = ReplicatedStorage
 end
 
+-- Events Folder
+local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
+if not eventsFolder then
+	eventsFolder = Instance.new("Folder")
+	eventsFolder.Name = "Events"
+	eventsFolder.Parent = ReplicatedStorage
+end
+
+-- TakePhoto BindableEvent (Client-to-Client)
+local takePhotoEvent = eventsFolder:FindFirstChild("TakePhoto")
+if not takePhotoEvent then
+	takePhotoEvent = Instance.new("BindableEvent")
+	takePhotoEvent.Name = "TakePhoto"
+	takePhotoEvent.Parent = eventsFolder
+end
+
 -- Helper 함수
 local function setStatus(msg)
 	statusValue.Value = msg

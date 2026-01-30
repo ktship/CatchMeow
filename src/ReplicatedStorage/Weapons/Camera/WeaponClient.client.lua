@@ -34,10 +34,25 @@ Tool.Activated:Connect(function()
 	
 	isTakingPhoto = true
 	
-	-- 서버로 촬영 요청 (위치만 전송)
+	-- 1. 서버로 촬영 요청 (위치만 전송 - 기존 로직 유지)
 	Remote:FireServer(Mouse.Hit.Position)
 	
-	-- 클라이언트 측 효과 (셔터 소리)
+	-- 2. 갤러리 저장 요청 (클라이언트 -> 클라이언트)
+	local target = Mouse.Target
+	if target then
+		-- Find Events/TakePhoto
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local events = ReplicatedStorage:FindFirstChild("Events")
+		if events then
+			local takePhotoEvent = events:FindFirstChild("TakePhoto")
+			if takePhotoEvent then
+				takePhotoEvent:Fire(target)
+				print("[Camera] Photo taken of:", target.Name)
+			end
+		end
+	end
+	
+	-- 3. 클라이언트 측 효과 (셔터 소리)
 	if Handle:FindFirstChild("ShutterSound") then
 		Handle.ShutterSound:Play()
 	end

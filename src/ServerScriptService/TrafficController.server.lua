@@ -25,32 +25,93 @@ local function getRoadX(z)
 	return roadAmp * math.sin(z * roadFreq)
 end
 
--- Function to spawn a single car
+-- Function to spawn a detailed car
 local function spawnCar()
-	local car = Instance.new("Part")
-	car.Name = "TrafficCar"
-	car.Size = Vector3.new(6, 4, 10) -- Boxy car
-	car.Color = Color3.fromHSV(math.random(), 0.7, 0.9) -- Random bright color
-	car.Material = Enum.Material.Metal
-	car.Anchored = true -- We move it via CFrame script (Kinematic)
-	car.CanCollide = false -- Ghost car to prevent blocking players physically (for now)
-	car.CastShadow = true
+	local model = Instance.new("Model")
+	model.Name = "TrafficCar"
 	
+	-- 1. Main Body
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Size = Vector3.new(6, 3, 10) -- Slightly lower body
+	body.Color = Color3.fromHSV(math.random(), 0.7, 0.9)
+	body.Material = Enum.Material.Plastic
+	body.Anchored = true
+	body.CanCollide = false
+	body.CastShadow = true
+	body.Parent = model
+	model.PrimaryPart = body
+	
+	-- 2. Cabin/Roof
+	local roof = Instance.new("Part")
+	roof.Name = "Roof"
+	roof.Size = Vector3.new(5, 1.5, 5)
+	roof.Color = body.Color
+	roof.Material = Enum.Material.Plastic
+	roof.Anchored = true
+	roof.CanCollide = false
+	roof.CFrame = body.CFrame * CFrame.new(0, 2.25, 0)
+	roof.Parent = model
+	
+	-- 3. Wheels (4x)
+	local wheelSize = 3.5 -- Bigger wheels (2.5 -> 3.5)
+	local wheelWidth = 1.2 -- Slightly wider too
+	local wheelOffsets = {
+		Vector3.new(-3, -1.5, -3), -- Front Left
+		Vector3.new(3, -1.5, -3),  -- Front Right
+		Vector3.new(-3, -1.5, 3),  -- Back Left
+		Vector3.new(3, -1.5, 3),   -- Back Right
+	}
+	
+	for _, offset in ipairs(wheelOffsets) do
+		local wheel = Instance.new("Part")
+		wheel.Name = "Wheel"
+		wheel.Shape = Enum.PartType.Cylinder
+		-- Cylinder: X is height (width), Y/Z are radius (diameter)
+		wheel.Size = Vector3.new(wheelWidth, wheelSize, wheelSize)
+		wheel.Color = Color3.new(0.1, 0.1, 0.1)
+		wheel.Material = Enum.Material.Rubber
+		wheel.Anchored = true
+		wheel.CanCollide = false
+		-- Rotate 90 deg on Z to make cylinder face sideways
+		-- Cylinder X axis is height, aligning with Body RightVector (X). No rotation needed.
+		wheel.CFrame = body.CFrame * CFrame.new(offset)
+		wheel.Parent = model
+	end
+	
+	-- 4. Lights
+	-- Headlights (Front)
+	local lightSize = Vector3.new(1, 0.5, 0.2)
+	local hLeft = Instance.new("Part")
+	hLeft.Name = "Headlight"
+	hLeft.Size = lightSize
+	hLeft.Color = Color3.new(1, 1, 0.8) -- Warm White
+	hLeft.Material = Enum.Material.Neon
+	hLeft.Anchored = true
+	hLeft.CanCollide = false
+	hLeft.CFrame = body.CFrame * CFrame.new(-2, 0.5, -5.1) -- Front face
+	hLeft.Parent = model
+	
+	local hRight = hLeft:Clone()
+	hRight.CFrame = body.CFrame * CFrame.new(2, 0.5, -5.1)
+	hRight.Parent = model
+	
+	-- Taillights (Back)
+	local tLeft = hLeft:Clone()
+	tLeft.Name = "Taillight"
+	tLeft.Color = Color3.new(1, 0, 0) -- Red
+	tLeft.CFrame = body.CFrame * CFrame.new(-2, 0.5, 5.1) -- Back face
+	tLeft.Parent = model
+	
+	local tRight = tLeft:Clone()
+	tRight.CFrame = body.CFrame * CFrame.new(2, 0.5, 5.1)
+	tRight.Parent = model
+
 	-- Start at North End (z = -halfSize)
 	local startZ = -halfSize
 	
-	car:SetAttribute("CurrentZ", startZ)
-	
-	car.Parent = carsFolder
-	
-	-- Collision Handling
-	local hitDebounce = {}
-	
-	-- Note: Touched doesn't fire reliably for CFrame moved Anchored parts interacting with players.
-	-- We will handle collision in the main loop using GetPartsInPart
-	
-	car:SetAttribute("CurrentZ", startZ)
-	car.Parent = carsFolder
+	model:SetAttribute("CurrentZ", startZ)
+	model.Parent = carsFolder
 end
 
 -- Game Status Check
@@ -63,7 +124,8 @@ task.spawn(function()
 		if gameStatus.Value == "Game in Progress" then
 			spawnCar()
 		end
-		task.wait(5)
+		-- Random spawn interval: 4 to 8 seconds
+		task.wait(math.random(4, 8))
 	end
 end)
 
@@ -87,7 +149,8 @@ RunService.Heartbeat:Connect(function(dt)
 	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
 
 	for _, car in ipairs(carsFolder:GetChildren()) do
-		if car:IsA("BasePart") then
+		if car:IsA("Model") and car.PrimaryPart then
+			local root = car.PrimaryPart
 			local currentZ = car:GetAttribute("CurrentZ") or -halfSize
 			
 			-- Move forward
@@ -107,13 +170,17 @@ RunService.Heartbeat:Connect(function(dt)
 				local lookZ = nextZ + 1
 				local lookX = getRoadX(lookZ)
 				
-				local currentPos = Vector3.new(currentX, 2.5, nextZ) -- Height slightly above road
-				local lookPos = Vector3.new(lookX, 2.5, lookZ)
+				-- Adjusted height: 4.5 (Lifted suspension)
+				local currentPos = Vector3.new(currentX, 4.5, nextZ) 
+				local lookPos = Vector3.new(lookX, 4.5, lookZ)
 				
-				car.CFrame = CFrame.lookAt(currentPos, lookPos)
+				local targetCFrame = CFrame.lookAt(currentPos, lookPos)
 				
-				-- COLLISION CHECK (Spatial Query)
-				local parts = workspace:GetPartsInPart(car, overlapParams)
+				-- Move Model
+				car:PivotTo(targetCFrame)
+				
+				-- COLLISION CHECK (Spatial Query on Body)
+				local parts = workspace:GetPartsInPart(root, overlapParams)
 				for _, part in ipairs(parts) do
 					local character = part.Parent
 					local humanoid = character:FindFirstChild("Humanoid")
@@ -143,7 +210,7 @@ RunService.Heartbeat:Connect(function(dt)
 							
 							humanoid.PlatformStand = true -- Free fall physics
 							
-							local flingDir = (rootPart.Position - car.Position).Unit
+							local flingDir = (rootPart.Position - root.Position).Unit
 							-- Higher Jump: Up 100 -> 150. Horizontal force unchanged (50).
 							local flingForce = flingDir * 50 + Vector3.new(0, 150, 0)
 							

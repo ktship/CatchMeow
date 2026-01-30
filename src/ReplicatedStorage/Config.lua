@@ -24,6 +24,14 @@ Config.Map = {
 	BuildingCount = 10, -- 시도할 건물 수
 	CarCount = 5, -- 배치할 차 수
 	BikeCount = 5, -- 배치할 오토바이 수
+	
+	-- Road Generation Parameters (Shared)
+	Road = {
+		Amplitude = 50,
+		Frequency = 0.02,
+		Width = 22,
+		BlockSize = 2,
+	}
 }
 
 -- 카메라 설정

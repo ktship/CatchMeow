@@ -23,6 +23,15 @@ Tool.Activated:Connect(function()
 	if not isEquipped then return end
 	if isTakingPhoto then return end
 	
+	-- Check if stunned (PlatformStand is used for the ragdoll/stun effect)
+	local character = Player.Character
+	if character then
+		local humanoid = character:FindFirstChild("Humanoid")
+		if humanoid and humanoid.PlatformStand then
+			return
+		end
+	end
+	
 	isTakingPhoto = true
 	
 	-- 서버로 촬영 요청 (위치만 전송)

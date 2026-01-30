@@ -13,38 +13,41 @@ local TeamManager
 -- 여기서는 초기화 순서를 보장한다는 전제로 진행
 -- 실제로는 GameManager가 이들을 조율하는 것이 좋음
 
+local function giveWeapon(player)
+	local weaponName = Config.Camera.Name
+	
+	-- 비동기로 무기 지급 시도
+	spawn(function()
+		local weaponsFolder = ReplicatedStorage:WaitForChild("Weapons", 30)
+		if not weaponsFolder then return end
+		
+		local weapon = weaponsFolder:WaitForChild(weaponName, 30)
+		if weapon then
+			-- 이미 있는지 확인
+			if player.Backpack:FindFirstChild(weaponName) then return end
+			if player.Character and player.Character:FindFirstChild(weaponName) then return end
+			
+			local newWeapon = weapon:Clone()
+			newWeapon.Parent = player.Backpack
+			
+			if player.Character and player.Character:FindFirstChild("Humanoid") then
+				player.Character.Humanoid:EquipTool(newWeapon)
+			end
+			print("[PlayerSetup] Weapon given to " .. player.Name)
+		end
+	end)
+end
+
 local function onCharacterAdded(player, character)
 	character:WaitForChild("Humanoid")
 	
 	-- 스폰 위치는 SpawnLocation 사용 (MapGenerator에서 생성)
 	
-	-- 2. 무기(카메라) 지급
-	local weaponName = Config.Camera.Name
-	
-	-- 비동기로 무기 지급 시도 (다른 작업 차단 방지)
-	spawn(function()
-		-- 1. Weapons 폴더 대기 (최대 30초)
-		local weaponsFolder = ReplicatedStorage:WaitForChild("Weapons", 30)
-		if not weaponsFolder then
-			warn("[PlayerSetup] Weapons folder not found in ReplicatedStorage after 30s")
-			return
-		end
-		
-		-- 2. 무기 대기 (최대 30초)
-		local weapon = weaponsFolder:WaitForChild(weaponName, 30)
-		if weapon then
-			local newWeapon = weapon:Clone()
-			newWeapon.Parent = player.Backpack
-			
-			-- 캐릭터가 존재하면 손에 쥐어주기
-			if player.Character and player.Character:FindFirstChild("Humanoid") then
-				player.Character.Humanoid:EquipTool(newWeapon)
-			end
-			print("[PlayerSetup] Weapon given to " .. player.Name)
-		else
-			warn("[PlayerSetup] Weapon '" .. weaponName .. "' not found in Weapons folder")
-		end
-	end)
+	-- 2. 무기(카메라) 지급 - GameStatus 체크
+	local gameStatus = ReplicatedStorage:FindFirstChild("GameStatus")
+	if gameStatus and gameStatus.Value == "Game in Progress" then
+		giveWeapon(player)
+	end
 	
 	-- 3. 캐릭터 외형 팀 컬러 적용 (선택 사항)
 	local humanoid = character:FindFirstChild("Humanoid")
@@ -66,6 +69,22 @@ local function onCharacterAdded(player, character)
 		player:LoadCharacter()
 	end)
 end
+
+-- Game Status Listener to give weapons when game starts
+spawn(function()
+	local gameStatus = ReplicatedStorage:WaitForChild("GameStatus", 10)
+	if gameStatus then
+		gameStatus.Changed:Connect(function(newStatus)
+			if newStatus == "Game in Progress" then
+				for _, player in pairs(Players:GetPlayers()) do
+					if player.Character then
+						giveWeapon(player)
+					end
+				end
+			end
+		end)
+	end
+end)
 
 local function onPlayerAdded(player)
 	-- 팀 배정

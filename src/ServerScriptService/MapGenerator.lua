@@ -20,8 +20,8 @@ local function createPart(name, size, position, color, material, parent)
 end
 
 function MapGenerator.Generate()
-	print("Generating City Map...")
-	
+	print("Generating Rural Valley Map with Flat Building Pads & Winding Road...")
+
 	-- 기존 맵 초기화
 	local mapFolder = workspace:FindFirstChild("Map")
 	if mapFolder then mapFolder:Destroy() end
@@ -29,68 +29,301 @@ function MapGenerator.Generate()
 	mapFolder.Name = "Map"
 	mapFolder.Parent = workspace
 
-	local mapSize = Config.Map.Size
+	-- 기본 Baseplate 제거
+	local baseplate = workspace:FindFirstChild("Baseplate") or workspace:FindFirstChild("BasePlate")
+	if baseplate then baseplate:Destroy() end
+
+	local mapSize = Config.Map.Size -- 200
 	local halfSize = mapSize / 2
-	local groundY = 0
-	
-	-- 1. 바닥 생성
-	createPart("Ground", Vector3.new(mapSize, 1, mapSize), Vector3.new(0, groundY, 0), Color3.fromRGB(50, 60, 50), Enum.Material.Grass, mapFolder)
+	local blockSize = 10 -- Main coarse grid size
 
-	-- 2. 도로 시스템 생성 (격자 형태)
-	local roadWidth = Config.Map.RoadWidth
-	local blockSize = 60 -- 블록 크기
-	local roadsFolder = Instance.new("Folder")
-	roadsFolder.Name = "Roads"
-	roadsFolder.Parent = mapFolder
-
-	-- 가로/세로 도로 생성
-	for x = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
-		createPart("RoadV", Vector3.new(roadWidth, 1.1, mapSize), Vector3.new(x, groundY+0.05, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Asphalt, roadsFolder)
-	end
-	for z = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
-		createPart("RoadH", Vector3.new(mapSize, 1.1, roadWidth), Vector3.new(0, groundY+0.05, z), Color3.fromRGB(40, 40, 40), Enum.Material.Asphalt, roadsFolder)
-	end
+	local groundFolder = Instance.new("Folder")
+	groundFolder.Name = "Ground"
+	groundFolder.Parent = mapFolder
 	
-	-- 3. 건물 및 구조물 배치
+	local roadFolder = Instance.new("Folder")
+	roadFolder.Name = "Roads"
+	roadFolder.Parent = mapFolder
+	
 	local buildingsFolder = Instance.new("Folder")
 	buildingsFolder.Name = "Buildings"
 	buildingsFolder.Parent = mapFolder
+
+	math.randomseed(os.time())
+	local seed = math.random(1, 10000)
+
+	-- Road Parameters (Winding) - From Config
+	local roadWidth = Config.Map.Road.Width
+	local roadAmplitude = Config.Map.Road.Amplitude
+	local roadFrequency = Config.Map.Road.Frequency
+	local roadBlockSize = Config.Map.Road.BlockSize
+
+	local function getRoadX(z)
+		return roadAmplitude * math.sin(z * roadFrequency)
+	end
+
+	-- 지형 높이 함수
+	local function getHeight(x, z)
+		local noiseScale = 60
+		local heightScale = 20
+		local noiseVal = math.noise(x / noiseScale + seed, z / noiseScale + seed, 0) * heightScale
+
+		local dist = math.sqrt(x^2 + z^2)
+		local valleyFactor = (dist / halfSize) ^ 2
+		local mountainHeight = valleyFactor * 30 -- Reduced height
+		
+		-- Flatten Center Logic
+		local flatRadius = 80
+		local innerFlatRadius = 40
+		local centerDamp = 1
+		
+		if dist < innerFlatRadius then
+			centerDamp = 0
+		elseif dist < flatRadius then
+			local t = (dist - innerFlatRadius) / (flatRadius - innerFlatRadius)
+			centerDamp = t * t * (3 - 2 * t)
+		end
+		
+		local baseHeight = (noiseVal + mountainHeight) * centerDamp
+		
+		-- Road Flattening Logic
+		local roadX = getRoadX(z)
+		local distToRoad = math.abs(x - roadX)
+		local roadInfluence = 45
+		
+		if distToRoad < roadInfluence then
+			local t = distToRoad / roadInfluence
+			t = t * t * (3 - 2 * t) 
+			baseHeight = baseHeight * t
+		end
+
+		return math.floor(baseHeight)
+	end
 	
-	local carsFolder = Instance.new("Folder")
-	carsFolder.Name = "Vehicles"
-	carsFolder.Parent = mapFolder
-	
-	-- 각 블록 내부 공간에 건물이나 주차장 배치
-	for x = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
-		for z = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
-			-- 블록 중심 좌표
+	-- Helper to generate a single terrain block (of any size)
+	local function generateTerrainBlock(x, z, size)
+		local y = getHeight(x, z)
+		
+		local color
+		local material = Enum.Material.Plastic
+
+		if y < 3 then
+			color = Color3.fromRGB(75, 151, 75)
+			material = Enum.Material.Grass
+		elseif y < 30 then
+			color = Color3.fromRGB(50, 120, 50)
+			material = Enum.Material.Grass
+		else
+			color = Color3.fromRGB(90, 100, 110)
+			material = Enum.Material.Slate
+		end
+
+		createPart("Terrain", Vector3.new(size, size*4, size), Vector3.new(x + size/2, y - size*2, z + size/2), color, material, groundFolder)
+	end
+
+	-- Adaptive Generation Loop
+	-- Iterate carefully using the coarse block size
+	for x = -halfSize, halfSize - blockSize, blockSize do
+		for z = -halfSize, halfSize - blockSize, blockSize do
+			
 			local centerX = x + blockSize/2
 			local centerZ = z + blockSize/2
 			
-			-- 도로와 겹치지 않는 유효 건축 영역
-			if centerX < halfSize and centerZ < halfSize then
-				-- 랜덤하게 건물 또는 공터 결정
-				local rand = math.random()
+			-- Check if this large block is near the road
+			-- We need to check minimal distance to the road curve within this Z range
+			-- Simple check: Evaluate roadX at centerZ.
+			
+			local roadX = getRoadX(centerZ)
+			local distToRoad = math.abs(centerX - roadX)
+			
+			-- Conservative Check: RoadWidth/2 + BlockSize (diagonal approx) + Buffer
+			-- If close to road, SUBDIVIDE.
+			if distToRoad < (roadWidth / 2) + 15 then
 				
-				if rand > 0.3 then -- 70% 확률로 건물
-					MapGenerator.CreateBuilding(centerX, groundY + 1, centerZ, buildingsFolder)
-				elseif rand > 0.1 then -- 20% 확률로 주차장(차량)
-					MapGenerator.CreateParkingLot(centerX, groundY + 1, centerZ, carsFolder)
+				-- SUBDIVIDE into 2x2 blocks
+				for subX = x, x + blockSize - roadBlockSize, roadBlockSize do
+					for subZ = z, z + blockSize - roadBlockSize, roadBlockSize do
+						
+						local subCenterX = subX + roadBlockSize/2
+						local subCenterZ = subZ + roadBlockSize/2
+						
+						local subRoadX = getRoadX(subCenterZ)
+						local subDist = math.abs(subCenterX - subRoadX)
+						
+						if subDist < roadWidth / 2 then
+							-- ROAD BLOCK
+							createPart("RoadBlock", Vector3.new(roadBlockSize, 1, roadBlockSize), Vector3.new(subCenterX, 0.5, subCenterZ), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
+							-- Filler under road
+							createPart("RoadBed", Vector3.new(roadBlockSize, 20, roadBlockSize), Vector3.new(subCenterX, 0 - 10, subCenterZ), Color3.fromRGB(100, 80, 60), Enum.Material.Slate, groundFolder)
+						else
+							-- TERRAIN BLOCK (Small)
+							generateTerrainBlock(subX, subZ, roadBlockSize)
+						end
+					end
 				end
+				
+			else
+				-- FAR FROM ROAD: Generate Single Large Block (Optimized)
+				generateTerrainBlock(x, z, blockSize)
+				
+				-- REMOVED House and Tree generation per user request.
+				-- Only Terrain and Road remaining.
 			end
 		end
 	end
+
+	-- Tunnels at ends
+	local function createTunnel(z, roadX)
+		local tunnelModel = Instance.new("Model")
+		tunnelModel.Name = "Tunnel"
+		tunnelModel.Parent = mapFolder
+		
+		-- Tunnel Frame Dimensions
+		local tWidth = roadWidth + 10
+		local tHeight = 20
+		local tLength = 10
+		local wallThickness = 4
+		
+		-- Left Wall
+		createPart("WallL", Vector3.new(wallThickness, tHeight, tLength), Vector3.new(roadX - roadWidth/2 - wallThickness/2, tHeight/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
+		-- Right Wall
+		createPart("WallR", Vector3.new(wallThickness, tHeight, tLength), Vector3.new(roadX + roadWidth/2 + wallThickness/2, tHeight/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
+		-- Ceiling
+		createPart("Ceiling", Vector3.new(tWidth + wallThickness*2, wallThickness, tLength), Vector3.new(roadX, tHeight + wallThickness/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
+		
+		-- Black Void (Blockade)
+		local voidPart = createPart("TunnelVoid", Vector3.new(tWidth - 2, tHeight, 2), Vector3.new(roadX, tHeight/2, z), Color3.fromRGB(0, 0, 0), Enum.Material.Neon, tunnelModel)
+		
+	end
 	
-	-- 5. 스폰 위치 생성 (가장자리에서 중앙을 바라보도록)
+	-- Create Tunnels at both ends
+	-- Slightly inside the map so player sees them before falling off
+	-- Map halfSize is 100. Let's place at +/- 95
+	createTunnel(-halfSize + 5, getRoadX(-halfSize + 5))
+	createTunnel(halfSize - 5, getRoadX(halfSize - 5))
+
+	-- 스폰 위치
 	MapGenerator.CreateSpawnLocations(mapFolder, mapSize)
-	
-	-- 6. 다리 생성 (중앙을 가로지르는)
-	MapGenerator.CreateBridge(mapFolder)
-	
-	-- 7. 경계 구역 생성 (위험 지역 + 킬존)
+
+	-- 경계
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
+
+	print("Rural Valley Map Generated!")
+end
+-- 가로등 배치
+function MapGenerator.CreateStreetLamps(parent, mapSize, roadWidth, blockSize)
+	local lampsFolder = Instance.new("Folder")
+	lampsFolder.Name = "StreetLamps"
+	lampsFolder.Parent = parent
 	
-	print("City Map Generated!")
+	local halfSize = mapSize / 2
+	
+	-- 격자 도로를 따라 배치 (교차로 제외)
+	for x = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
+		for z = -halfSize + blockSize/2, halfSize - blockSize/2, blockSize do
+			-- 블록 네 모퉁이에 가로등 배치
+			local offset = blockSize/2 - 4 -- 도로 경계에서 약간 안쪽
+			
+			-- 4개 코너
+			MapGenerator.CreateLamp(x - offset, 0, z - offset, lampsFolder)
+			MapGenerator.CreateLamp(x + offset, 0, z - offset, lampsFolder)
+			MapGenerator.CreateLamp(x - offset, 0, z + offset, lampsFolder)
+			MapGenerator.CreateLamp(x + offset, 0, z + offset, lampsFolder)
+		end
+	end
+end
+
+function MapGenerator.CreateLamp(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "StreetLamp"
+	model.Parent = parent
+	
+	-- 기둥
+	createPart("Pole", Vector3.new(1, 12, 1), Vector3.new(x, y + 6, z), Color3.fromRGB(50, 50, 50), Enum.Material.Metal, model)
+	
+	-- 헤드 (ㄱ자 형태)
+	createPart("Arm", Vector3.new(3, 1, 1), Vector3.new(x + 1, y + 11.5, z), Color3.fromRGB(50, 50, 50), Enum.Material.Metal, model)
+	
+	-- 불빛 (꺼짐)
+	local lightPart = createPart("Light", Vector3.new(1, 0.5, 1), Vector3.new(x + 2, y + 11, z), Color3.fromRGB(200, 200, 200), Enum.Material.Plastic, model)
+	-- PointLight 제거됨
+end
+
+-- 나무 생성
+function MapGenerator.CreateTree(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "Tree"
+	model.Parent = parent
+	
+	-- 줄기
+	local trunkHeight = math.random(6, 9)
+	createPart("Trunk", Vector3.new(2, trunkHeight, 2), Vector3.new(x, y + trunkHeight/2, z), Color3.fromRGB(100, 60, 30), Enum.Material.Wood, model)
+	
+	-- 나뭇잎 (구형)
+	local leavesSize = math.random(8, 12)
+	local leaves = createPart("Leaves", Vector3.new(leavesSize, leavesSize, leavesSize), Vector3.new(x, y + trunkHeight + leavesSize/3, z), Color3.fromRGB(50, 150, 50), Enum.Material.Plastic, model)
+	leaves.Shape = Enum.PartType.Ball
+end
+
+-- 우편함 생성
+function MapGenerator.CreateMailbox(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "Mailbox"
+	model.Parent = parent
+	
+	-- 기둥
+	createPart("Post", Vector3.new(0.5, 3, 0.5), Vector3.new(x, y + 1.5, z), Color3.fromRGB(200, 200, 200), Enum.Material.Metal, model)
+	
+	-- 박스
+	createPart("Box", Vector3.new(1.5, 1, 2), Vector3.new(x, y + 3, z), Color3.fromRGB(50, 50, 200), Enum.Material.Plastic, model)
+	
+	-- 깃발
+	createPart("Flag", Vector3.new(0.2, 0.8, 0.2), Vector3.new(x + 0.8, y + 3.5, z), Color3.fromRGB(200, 50, 50), Enum.Material.Plastic, model)
+end
+
+-- 공원 생성
+function MapGenerator.CreatePark(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "Park"
+	model.Parent = parent
+	
+	-- 잔디밭 (약간 솟아오름)
+	local parkSize = 40
+	createPart("Grass", Vector3.new(parkSize, 0.5, parkSize), Vector3.new(x, y + 0.25, z), Color3.fromRGB(60, 160, 60), Enum.Material.Grass, model)
+	
+	-- 분수대 (중앙)
+	MapGenerator.CreateFountain(x, y + 0.5, z, model)
+	
+	-- 나무 배치 (4면)
+	local treeOffset = 15
+	MapGenerator.CreateTree(x - treeOffset, y, z - treeOffset, model)
+	MapGenerator.CreateTree(x + treeOffset, y, z - treeOffset, model)
+	MapGenerator.CreateTree(x - treeOffset, y, z + treeOffset, model)
+	MapGenerator.CreateTree(x + treeOffset, y, z + treeOffset, model)
+	
+	-- 벤치 (생략 가능하지만 간단하게)
+	createPart("Bench1", Vector3.new(6, 1.5, 2), Vector3.new(x, y + 0.75, z - 10), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
+	createPart("Bench2", Vector3.new(6, 1.5, 2), Vector3.new(x, y + 0.75, z + 10), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
+end
+
+-- 분수대 생성
+function MapGenerator.CreateFountain(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "Fountain"
+	model.Parent = parent
+	
+	-- 받침대
+	createPart("Base", Vector3.new(12, 1, 12), Vector3.new(x, y + 0.5, z), Color3.fromRGB(200, 200, 200), Enum.Material.Concrete, model)
+	
+	-- 물통
+	local pool = createPart("Pool", Vector3.new(10, 1.5, 10), Vector3.new(x, y + 1.25, z), Color3.fromRGB(50, 150, 255), Enum.Material.Plastic, model)
+	pool.Transparency = 0.3
+	
+	-- 중앙 기둥
+	createPart("Pillar", Vector3.new(2, 5, 2), Vector3.new(x, y + 2.5, z), Color3.fromRGB(220, 220, 220), Enum.Material.Concrete, model)
+	
+	-- 물 뿜기 (파티클 대신 파트로 표현)
+	local waterTop = createPart("WaterTop", Vector3.new(4, 0.5, 4), Vector3.new(x, y + 5, z), Color3.fromRGB(100, 200, 255), Enum.Material.Plastic, model)
 end
 
 -- 경계 구역 생성 함수 (맵 바깥에 경고 구역)
@@ -145,18 +378,17 @@ function MapGenerator.CreateBoundaryZone(parent, mapSize)
 	killBrick:SetAttribute("KillZone", true)
 end
 
--- 스폰 위치 생성 함수 (맵 가장자리에 배치)
+-- 스폰 위치 생성 함수 (마을 중앙 광장 근처)
 function MapGenerator.CreateSpawnLocations(parent, mapSize)
-	local halfSize = mapSize / 2
-	-- 맵 가장자리에 배치 (맵 끝에서 3스터드 안쪽)
-	local edgeOffset = halfSize - 3
+	-- 중앙 근처 4곳에 배치
+	local offset = 10
+	local spawnY = 8 -- 지형 높이 고려하여 약간 띄움 (레이캐스트 등으로 정확히 할 수도 있음)
 	
-	-- 4면 가장자리에 스폰 위치 생성 (중앙을 바라봄)
 	local spawnPositions = {
-		{pos = Vector3.new(0, 1, -edgeOffset), lookAt = Vector3.new(0, 1, 0)}, -- 북쪽 가장자리
-		{pos = Vector3.new(0, 1, edgeOffset), lookAt = Vector3.new(0, 1, 0)},  -- 남쪽 가장자리
-		{pos = Vector3.new(-edgeOffset, 1, 0), lookAt = Vector3.new(0, 1, 0)}, -- 서쪽 가장자리
-		{pos = Vector3.new(edgeOffset, 1, 0), lookAt = Vector3.new(0, 1, 0)},  -- 동쪽 가장자리
+		{pos = Vector3.new(0, spawnY, -offset), lookAt = Vector3.new(0, spawnY, 0)}, -- 북
+		{pos = Vector3.new(0, spawnY, offset), lookAt = Vector3.new(0, spawnY, 0)},  -- 남
+		{pos = Vector3.new(-offset, spawnY, 0), lookAt = Vector3.new(0, spawnY, 0)}, -- 서
+		{pos = Vector3.new(offset, spawnY, 0), lookAt = Vector3.new(0, spawnY, 0)},  -- 동
 	}
 	
 	for i, spawnData in ipairs(spawnPositions) do
@@ -166,37 +398,97 @@ function MapGenerator.CreateSpawnLocations(parent, mapSize)
 		spawn.CFrame = CFrame.lookAt(spawnData.pos, spawnData.lookAt)
 		spawn.Anchored = true
 		spawn.CanCollide = false
-		spawn.Neutral = true -- 모든 플레이어 스폰 가능
-		spawn.Material = Enum.Material.ForceField
-		spawn.Transparency = 0.5
+		spawn.Neutral = true
+		spawn.Transparency = 1 -- 투명하게 숨김
 		spawn.Parent = parent
 	end
 end
 
 function MapGenerator.CreateBuilding(x, y, z, parent)
-	local width = math.random(20, 35)
-	local depth = math.random(20, 35)
-	local height = math.random(15, 45) -- 1층~3층 높이 다양하게
+	-- 레고 스타일 집 (다양성 추가)
+	local houseWidth = math.random(18, 24)
+	local houseDepth = math.random(16, 22)
+	local floorHeight = 8 -- 각 층 높이
+	local roofHeight = 6 -- 지붕 높이
 	
-	local buildingColor = Color3.fromHSV(math.random(), 0.5, 0.7)
+	-- 층수 결정 (1층 또는 2층)
+	local floors = math.random(1, 2)
+	
+	-- 색상 팔레트 (너무 밝지 않게 조정)
+	local wallColors = {
+		Color3.fromRGB(220, 220, 220), -- White (Dartkened)
+		Color3.fromRGB(230, 230, 210), -- Beige
+		Color3.fromRGB(140, 170, 200), -- Sand Blue
+		Color3.fromRGB(240, 220, 140), -- Light Yellow
+		Color3.fromRGB(180, 200, 160), -- Light Green
+	}
+	local roofColors = {
+		Color3.fromRGB(180, 40, 40), -- Red
+		Color3.fromRGB(40, 80, 150), -- Blue
+		Color3.fromRGB(40, 90, 40),  -- Green
+		Color3.fromRGB(50, 50, 50),  -- Black
+		Color3.fromRGB(100, 60, 40), -- Brown
+	}
+	
+	local wallColor = wallColors[math.random(#wallColors)]
+	local roofColor = roofColors[math.random(#roofColors)]
+	local windowColor = Color3.fromRGB(100, 150, 200) -- 파란 창문
+	local doorColor = Color3.fromRGB(80, 50, 30) -- 갈색 문
 	
 	local model = Instance.new("Model")
-	model.Name = "Building"
+	model.Name = "House"
 	model.Parent = parent
 	
-	-- 메인 건물
-	local mainPart = createPart("Main", Vector3.new(width, height, depth), Vector3.new(x, y + height/2, z), buildingColor, Enum.Material.Concrete, model)
+	-- 1층 벽 (SmoothPlastic -> Plastic)
+	createPart("Floor1", Vector3.new(houseWidth, floorHeight, houseDepth), 
+		Vector3.new(x, y + floorHeight/2, z), wallColor, Enum.Material.Plastic, model)
 	
-	-- 옥상 테두리 (커버 포인트)
-	local rimHeight = 2
-	local rimThick = 1
-	createPart("Rim1", Vector3.new(width, rimHeight, rimThick), Vector3.new(x, y + height + rimHeight/2, z - depth/2 + rimThick/2), buildingColor, Enum.Material.Concrete, model)
-	createPart("Rim2", Vector3.new(width, rimHeight, rimThick), Vector3.new(x, y + height + rimHeight/2, z + depth/2 - rimThick/2), buildingColor, Enum.Material.Concrete, model)
-	createPart("Rim3", Vector3.new(rimThick, rimHeight, depth - rimThick*2), Vector3.new(x - width/2 + rimThick/2, y + height + rimHeight/2, z), buildingColor, Enum.Material.Concrete, model)
-	createPart("Rim4", Vector3.new(rimThick, rimHeight, depth - rimThick*2), Vector3.new(x + width/2 - rimThick/2, y + height + rimHeight/2, z), buildingColor, Enum.Material.Concrete, model)
+	-- 2층 벽 (있을 경우)
+	if floors == 2 then
+		createPart("Floor2", Vector3.new(houseWidth, floorHeight, houseDepth), 
+			Vector3.new(x, y + floorHeight + floorHeight/2, z), wallColor, Enum.Material.Plastic, model)
+	end
 	
-	-- 창문 및 문 (장식)
-	local door = createPart("Door", Vector3.new(6, 8, 1), Vector3.new(x, y + 4, z - depth/2 - 0.5), Color3.new(0.3, 0.2, 0.1), Enum.Material.Wood, model)
+	-- 총 벽 높이 계산
+	local totalWallHeight = floorHeight * floors
+	
+	-- 삼각 지붕 (Wedge 대신 두 개의 기울어진 파트로 표현)
+	local roofThick = 1.5
+	local roofOverhang = 2 -- 지붕이 벽 밖으로 튀어나오는 정도
+	
+	-- 지붕 왼쪽 면
+	local roofLeft = createPart("RoofLeft", Vector3.new(houseWidth + roofOverhang*2, roofThick, houseDepth/2 + roofOverhang), 
+		Vector3.new(x, y + totalWallHeight + roofHeight/2, z - houseDepth/4), roofColor, Enum.Material.Plastic, model)
+	roofLeft.Orientation = Vector3.new(-30, 0, 0) -- 기울기
+	
+	-- 지붕 오른쪽 면
+	local roofRight = createPart("RoofRight", Vector3.new(houseWidth + roofOverhang*2, roofThick, houseDepth/2 + roofOverhang), 
+		Vector3.new(x, y + totalWallHeight + roofHeight/2, z + houseDepth/4), roofColor, Enum.Material.Plastic, model)
+	roofRight.Orientation = Vector3.new(30, 0, 0) -- 반대쪽 기울기
+	
+	-- 지붕 꼭대기 (마감 - 작은 틈 메우기)
+	createPart("RoofTop", Vector3.new(houseWidth + roofOverhang*2, roofThick, roofThick), 
+		Vector3.new(x, y + totalWallHeight + roofHeight, z), roofColor, Enum.Material.Plastic, model)
+	
+	-- 1층 창문들 (앞면) - 불 꺼진 창문
+	local windowSize = Vector3.new(3, 4, 0.5)
+	local darkWindowColor = Color3.fromRGB(30, 40, 50) -- 어두운 색
+	createPart("Window1F_L", windowSize, Vector3.new(x - houseWidth/4, y + floorHeight/2, z - houseDepth/2 - 0.2), darkWindowColor, Enum.Material.Plastic, model)
+	createPart("Window1F_R", windowSize, Vector3.new(x + houseWidth/4, y + floorHeight/2, z - houseDepth/2 - 0.2), darkWindowColor, Enum.Material.Plastic, model)
+	
+	-- 2층 창문들 (앞면, 2층일 때만)
+	if floors == 2 then
+		createPart("Window2F_L", windowSize, Vector3.new(x - houseWidth/4, y + floorHeight + floorHeight/2, z - houseDepth/2 - 0.2), darkWindowColor, Enum.Material.Plastic, model)
+		createPart("Window2F_R", windowSize, Vector3.new(x + houseWidth/4, y + floorHeight + floorHeight/2, z - houseDepth/2 - 0.2), darkWindowColor, Enum.Material.Plastic, model)
+	end
+	
+	-- 문 (앞면 중앙)
+	createPart("Door", Vector3.new(4, 6, 0.5), Vector3.new(x, y + 3, z - houseDepth/2 - 0.2), doorColor, Enum.Material.Wood, model)
+	
+	-- 굴뚝 (랜덤 위치)
+	local chimneySize = Vector3.new(2, 5, 2)
+	local chimneyX = (math.random() > 0.5) and (x + houseWidth/3) or (x - houseWidth/3) -- 왼쪽 또는 오른쪽
+	createPart("Chimney", chimneySize, Vector3.new(chimneyX, y + totalWallHeight + roofHeight + 1, z), Color3.fromRGB(100, 80, 70), Enum.Material.Brick, model)
 end
 
 function MapGenerator.CreateParkingLot(x, y, z, parent)

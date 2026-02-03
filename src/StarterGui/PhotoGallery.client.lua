@@ -24,21 +24,156 @@ end
 
 -- print("--- [PhotoGallery] ScreenGui Created in PlayerGui ---")
 
--- Open Button (Restored)
+-- Open Button (Album)
 local openBtn = Instance.new("TextButton")
 openBtn.Name = "OpenGalleryBtn"
 openBtn.Size = UDim2.new(0, 100, 0, 40)
-openBtn.Position = UDim2.new(1, -120, 1, -50) -- Bottom Right
+openBtn.Position = UDim2.new(1, -230, 1, -50) -- [Modified] Shifted Left
 openBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 openBtn.Text = "Album 📸"
 openBtn.TextScaled = true
 openBtn.Parent = screenGui
--- print("--- [PhotoGallery] Button Created ---")
 openBtn.BorderSizePixel = 0
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = openBtn
+
+-- [Added] Save Map Button (Next to Album)
+local saveBtn = Instance.new("TextButton")
+saveBtn.Name = "SaveMapBtn"
+saveBtn.Size = UDim2.new(0, 100, 0, 40)
+saveBtn.Position = UDim2.new(1, -120, 1, -50) -- [Modified] Original Album Position (Bottom Right)
+saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveBtn.Text = "Save Map 💾"
+saveBtn.TextScaled = true
+saveBtn.BorderSizePixel = 0
+saveBtn.Parent = screenGui
+
+local saveCorner = Instance.new("UICorner")
+saveCorner.CornerRadius = UDim.new(0, 8)
+saveCorner.Parent = saveBtn
+
+saveBtn.MouseButton1Click:Connect(function()
+	local events = ReplicatedStorage:WaitForChild("Events")
+	local remote = events:FindFirstChild("SaveMapDebug")
+	if remote then
+		remote:FireServer()
+		saveBtn.Text = "Saved!"
+		task.wait(2)
+		saveBtn.Text = "Save Map 💾"
+	end
+end)
+
+-- [Added] Tree Planter Toggle
+local isPlanting = false
+local plantBtn = Instance.new("TextButton")
+plantBtn.Name = "PlantTreeBtn"
+plantBtn.Size = UDim2.new(0, 40, 0, 40)
+plantBtn.Position = UDim2.new(1, -120, 1, -100) -- [Modified] Moved Up (Row 2), Aligned right
+plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50) -- Green
+plantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+plantBtn.Text = "🌲"
+plantBtn.TextScaled = true
+plantBtn.BorderSizePixel = 0
+plantBtn.Parent = screenGui
+
+local plantCorner = Instance.new("UICorner")
+plantCorner.CornerRadius = UDim.new(0, 8)
+plantCorner.Parent = plantBtn
+
+-- [Added] Delete Tree Button
+local isDeleting = false
+local deleteBtn = Instance.new("TextButton")
+deleteBtn.Name = "DeleteTreeBtn"
+deleteBtn.Size = UDim2.new(0, 40, 0, 40)
+deleteBtn.Position = UDim2.new(1, -170, 1, -100) -- [Modified] Moved Up (Row 2), Left of Plant
+deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Red
+deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+deleteBtn.Text = "🪓"
+deleteBtn.TextScaled = true
+deleteBtn.BorderSizePixel = 0
+deleteBtn.Parent = screenGui
+
+local delCorner = Instance.new("UICorner")
+delCorner.CornerRadius = UDim.new(0, 8)
+delCorner.Parent = deleteBtn
+
+-- Toggle Functions
+local function updateButtons()
+	if isPlanting then
+		plantBtn.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+		deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		screenGui:SetAttribute("Mode", "Plant")
+	elseif isDeleting then
+		plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+		deleteBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100) -- Bright Red
+		screenGui:SetAttribute("Mode", "Delete")
+	else
+		plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+		deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		screenGui:SetAttribute("Mode", "None")
+	end
+end
+
+plantBtn.MouseButton1Click:Connect(function()
+	isPlanting = not isPlanting
+	isDeleting = false -- Mutually exclusive
+	updateButtons()
+end)
+
+deleteBtn.MouseButton1Click:Connect(function()
+	isDeleting = not isDeleting
+	isPlanting = false -- Mutually exclusive
+	updateButtons()
+end)
+
+-- Planting Logic (Click Listener)
+-- Logic (Click Listener)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if (not isPlanting and not isDeleting) then return end
+	if gameProcessed then return end -- Ignore UI clicks
+	
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local mouse = player:GetMouse()
+		local ray = workspace.CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = {player.Character}
+		
+		local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+		
+		if result and result.Instance then
+			local events = ReplicatedStorage:WaitForChild("Events")
+			
+			if isPlanting then
+				-- PLANT Logic
+				local plantRemote = events:FindFirstChild("PlantTree")
+				if plantRemote then
+					plantRemote:FireServer(result.Position)
+				end
+				
+			elseif isDeleting then
+				-- DELETE Logic
+				-- Check if clicked object is part of a Tree
+				local model = result.Instance:FindFirstAncestorOfClass("Model")
+				if model and model.Name:match("Tree_Type") then
+					-- Found a tree!
+					local removeRemote = events:FindFirstChild("RemoveTree")
+					if removeRemote then
+						-- Send Position of Tree Pivot (Center) for server verification
+						local pos = model:GetPivot().Position
+						removeRemote:FireServer(pos)
+						
+						-- Optional: Simple client prediction visual? 
+						-- No, let server handle it to ensure sync.
+					end
+				end
+			end
+		end
+	end
+end)
 
 -- Gallery Window (Hidden by default)
 local window = Instance.new("Frame")

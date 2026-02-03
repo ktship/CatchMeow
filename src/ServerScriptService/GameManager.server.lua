@@ -6,7 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 local MapGenerator = require(game.ServerScriptService:WaitForChild("MapGenerator"))
-local TeamManager = require(game.ServerScriptService:WaitForChild("TeamManager"))
 
 -- [Fix] Prevent "Teleport Glitch" (Spawning at 0,0,0 then jumping to spawn)
 -- Disable AutoLoad so we can manually spawn players ONLY after map is ready.
@@ -56,87 +55,30 @@ end
 
 -- 메인 게임 루프
 local function gameLoop()
-	-- 시작하자마자 로딩 중임을 알림
-	setStatus("Loading System...")
+	-- 0. [초기화] 서버 시작 -> 로비 생성 (Sky Plaza)
+	setStatus("Loading Lobby...")
+	MapGenerator.GenerateLobby()
+	respawnAll() 
+	
+	-- 1. [자동 이동] 1초 대기 후 산골마을로 이동
 	wait(1)
-
+	setStatus("Traveling to Village...")
+	MapGenerator.GenerateVillage()
+	respawnAll()
+	
 	while true do
-		-- 1. 인터미션 (대기 시간)
-		setStatus("Starting in...")
-		for i = Config.Game.IntermissionDuration, 1, -1 do
-			setStatus("Starting in " .. i)
-			timerValue.Value = i
-			wait(1)
-		end
-		
-		-- 2. 라운드 준비
-		setStatus("Generating Map...")
-		wait(1)
-		MapGenerator.Generate() -- 새 맵 생성
-		TeamManager.Initialize() -- 팀 재설정 (균형 맞추기 등 필요시)
-		
-		-- 플레이어 재소환
-		respawnAll()
-		
-		-- 3. 라운드 시작
+		-- 2. 게임 루프 시작 (산골마을 유지)
 		setStatus("Game in Progress")
-		local roundTime = Config.Game.RoundDuration
-		
-		for i = roundTime, 1, -1 do
-			timerValue.Value = i
-			
-			-- 승리 조건 체크 (예: 한 팀 전멸 확인)
-			-- 여기서는 간단히 시간제한만 적용
-			
-			wait(1)
-		end
-		
-		-- 4. 라운드 종료 및 승자 판정
-		setStatus("Round Over!")
-		
-		-- 점수 확인
-		local redKills = 0
-		local blueKills = 0
-		
-		for _, player in pairs(Players:GetPlayers()) do
-			if player.Team and player:FindFirstChild("leaderstats") then
-				if player.Team.Name == "Red Team" then
-					redKills = redKills + player.leaderstats.Kills.Value
-				elseif player.Team.Name == "Blue Team" then
-					blueKills = blueKills + player.leaderstats.Kills.Value
-				end
-			end
-		end
-		
-		if redKills > blueKills then
-			setStatus("Red Team Wins!")
-		elseif blueKills > redKills then
-			setStatus("Blue Team Wins!")
-		else
-			setStatus("Draw!")
-		end
-		
-		wait(5) -- 결과 보여주기
-		
-		-- 점수 리셋 (다음 라운드를 위해)
-		for _, player in pairs(Players:GetPlayers()) do
-			if player:FindFirstChild("leaderstats") then
-				player.leaderstats.Kills.Value = 0
-				player.leaderstats.Deaths.Value = 0
-			end
-		end
+		timerValue.Value = 0
+		wait(5)
 	end
 end
 
 
-
 -- [Fix] Handle Late Joiners
 Players.PlayerAdded:Connect(function(player)
-	-- If game is already running, spawn them
-	if statusValue.Value == "Game in Progress" then
-		wait(1) -- Wait for scripts to load
-		if player then player:LoadCharacter() end
-	end
+	wait(1) 
+	if player then player:LoadCharacter() end
 end)
 
 -- 루프 시작

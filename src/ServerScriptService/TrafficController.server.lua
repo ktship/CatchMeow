@@ -153,8 +153,44 @@ RunService.Heartbeat:Connect(function(dt)
 			local root = car.PrimaryPart
 			local currentZ = car:GetAttribute("CurrentZ") or -halfSize
 			
-			-- Move forward
-			local nextZ = currentZ + (carSpeed * dt)
+			
+			-- [Smart Traffic] Check for Obstacles (Hitbox / Spatial Query)
+			-- Raycast was unreliable for small moving targets. Use Volumetric Hitbox.
+			local isBlocked = false
+			
+			-- Hitbox Specs
+			local boxSize = Vector3.new(8, 6, 12) -- [Adjusted] Shorter range (12)
+			local boxCFrame = root.CFrame * CFrame.new(0, -2.5, -8) -- [Adjusted] Closer check (Center -8, Range -2 to -14)
+			
+			local overlapParams = OverlapParams.new()
+			-- [Fixed] Do NOT ignore mapFolder because Cats are inside it!
+			-- We will filter out non-Cat objects in the loop loop below.
+			local ignoreList = {car, workspace.Terrain}
+			
+			overlapParams.FilterDescendantsInstances = ignoreList
+			overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+			
+			local parts = workspace:GetPartBoundsInBox(boxCFrame, boxSize, overlapParams)
+			
+			for _, part in ipairs(parts) do
+				local model = part:FindFirstAncestorOfClass("Model")
+				if model then
+					if model.Name == "Cat" then
+						isBlocked = true
+						-- print("Obstacle Detected: Cat")
+						break -- Stop checking if caught
+					elseif model:FindFirstChild("Humanoid") and model.Name ~= "TrafficCar" then
+						-- Also stop for players? (Optional, maybe nice)
+						-- isBlocked = true
+					end
+				end
+			end
+			
+			-- Move forward only if not blocked
+			local nextZ = currentZ
+			if not isBlocked then
+				nextZ = currentZ + (carSpeed * dt)
+			end
 			
 			-- Check if reached end
 			if nextZ > halfSize then
@@ -196,7 +232,7 @@ RunService.Heartbeat:Connect(function(dt)
 							if not GLOBAL_DEBOUNCE[character] then
 								GLOBAL_DEBOUNCE[character] = true
 								
-								print("Hit Character:", character.Name)
+								-- print("Hit Character:", character.Name)
 							
 							-- 1. Damage
 							humanoid:TakeDamage(40)
@@ -326,4 +362,4 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 
-print("Traffic Controller Started: Cars spawning every 5s")
+-- print("Traffic Controller Started: Cars spawning every 5s")

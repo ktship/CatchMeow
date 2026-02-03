@@ -14,6 +14,7 @@ statusFrame.BackgroundTransparency = 0.5
 statusFrame.BackgroundColor3 = Color3.new(0, 0, 0)
 statusFrame.BorderSizePixel = 0
 statusFrame.Parent = gui
+statusFrame.Visible = false -- [Modified] Hidden by default (User Request)
 
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, 0, 0.6, 0)
@@ -65,7 +66,11 @@ local timeLeft = ReplicatedStorage:WaitForChild("TimeLeft")
 
 gameStatus.Changed:Connect(function(val)
 	statusLabel.Text = val
+	-- statusFrame.Visible = (val ~= "") -- [Modified] Always hidden
 end)
+
+-- Initial check
+-- statusFrame.Visible = (gameStatus.Value ~= "") -- [Modified] Always hidden
 
 timeLeft.Changed:Connect(function(val)
 	local mins = math.floor(val / 60)

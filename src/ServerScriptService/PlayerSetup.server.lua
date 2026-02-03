@@ -94,10 +94,8 @@ spawn(function()
 end)
 
 local function onPlayerAdded(player)
-	-- 팀 배정
-	if TeamManager then
-		TeamManager.AssignTeam(player)
-	end
+	-- 팀 배정 제거됨 (TeamManager Removed)
+	-- if TeamManager then... end
 	
 	player.CharacterAdded:Connect(function(character)
 		onCharacterAdded(player, character)
@@ -109,7 +107,7 @@ end
 
 -- 외부에서 초기화 호출
 local function Initialize()
-	TeamManager = require(ServerScriptService:WaitForChild("TeamManager"))
+	-- TeamManager Removed
 	Config = require(ReplicatedStorage:WaitForChild("Config"))
 	
 	-- 이미 접속한 플레이어 처리

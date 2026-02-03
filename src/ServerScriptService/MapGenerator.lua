@@ -5,6 +5,17 @@
 local MapGenerator = {}
 
 local Config = require(game.ReplicatedStorage:WaitForChild("Config"))
+local DataStoreService = game:GetService("DataStoreService")
+local CityMapStore
+local success, result = pcall(function()
+	return DataStoreService:GetDataStore("CityMapData_v1")
+end)
+
+if success then
+	CityMapStore = result
+else
+	warn("⚠️ DataStore Service Unavailable (Publish Place to fix): " .. tostring(result))
+end
 
 local function createPart(name, size, position, color, material, parent)
 	local part = Instance.new("Part")
@@ -19,13 +30,120 @@ local function createPart(name, size, position, color, material, parent)
 	return part
 end
 
-function MapGenerator.Generate()
-	-- print("Generating Rural Valley Map with Flat Building Pads & Winding Road...")
-
-	-- 기존 맵 초기화
+function MapGenerator.ClearMap()
 	local mapFolder = workspace:FindFirstChild("Map")
 	if mapFolder then mapFolder:Destroy() end
-	mapFolder = Instance.new("Folder")
+end
+
+-- 조명 설정 (눈부심 제거)
+function MapGenerator.SetupLighting()
+	local Lighting = game:GetService("Lighting")
+	
+	-- 1. Remove Glare Effects & Force Zero Bloom
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child:IsA("PostEffect") then
+			child:Destroy()
+		end
+	end
+	
+	local noBloom = Instance.new("BloomEffect")
+	noBloom.Name = "NoBloom"
+	noBloom.Intensity = 0
+	noBloom.Size = 0
+	noBloom.Threshold = 100
+	noBloom.Enabled = true
+	noBloom.Parent = Lighting
+	
+	-- 2. Neutral Lighting Settings
+	Lighting.GlobalShadows = true
+	Lighting.Brightness = 2
+	Lighting.ClockTime = 14 -- Afternoon
+	Lighting.ExposureCompensation = 0 
+	Lighting.Ambient = Color3.fromRGB(150, 150, 150)
+	Lighting.OutdoorAmbient = Color3.fromRGB(120, 120, 120)
+	
+	-- [Critical] Disable PBR Reflections (Prevents "Glow" popping in)
+	Lighting.EnvironmentDiffuseScale = 0
+	Lighting.EnvironmentSpecularScale = 0
+end
+
+-- 로비 생성 (Grand Indoor Hall - High Ceiling 1st Floor)
+function MapGenerator.GenerateLobby()
+	-- 기존 맵 초기화
+	MapGenerator.ClearMap()
+	
+	local mapFolder = Instance.new("Folder")
+	mapFolder.Name = "Map"
+	mapFolder.Parent = workspace
+	
+	local lobbyY = 200 -- Sky Lobby Height
+	local lobbyWidth = 160 -- Expanded for 30 players
+	local lobbyDepth = 160
+	local ceilingHeight = 60 -- Taller ceiling for grander feel
+	
+	-- print("Generating Grand Indoor Lobby (Expanded & Open)...")
+	
+	-- [Lighting Fix] Remove "Dazzling" Effects (Bloom, Glare)
+	MapGenerator.SetupLighting()
+	
+	-- 1. 바닥 (Floor) - Lighter Wood
+	createPart("LobbyFloor", Vector3.new(lobbyWidth, 1, lobbyDepth), Vector3.new(0, lobbyY, 0), Color3.fromRGB(220, 190, 150), Enum.Material.WoodPlanks, mapFolder)
+	
+	-- 2. 천장 (Ceiling) - Darker
+	createPart("LobbyCeiling", Vector3.new(lobbyWidth, 1, lobbyDepth), Vector3.new(0, lobbyY + ceilingHeight, 0), Color3.fromRGB(60, 60, 70), Enum.Material.Concrete, mapFolder)
+	
+	-- 3. 벽 (Walls)
+	local wallColor = Color3.fromRGB(230, 230, 220)
+	local wallMat = Enum.Material.Concrete
+	
+	-- Back Wall (North)
+	createPart("WallBack", Vector3.new(lobbyWidth, ceilingHeight, 2), Vector3.new(0, lobbyY + ceilingHeight/2, -lobbyDepth/2), wallColor, wallMat, mapFolder)
+	-- Front Wall (South)
+	createPart("WallFront", Vector3.new(lobbyWidth, ceilingHeight, 2), Vector3.new(0, lobbyY + ceilingHeight/2, lobbyDepth/2), wallColor, wallMat, mapFolder)
+	-- Left Wall (West)
+	createPart("WallLeft", Vector3.new(2, ceilingHeight, lobbyDepth), Vector3.new(-lobbyWidth/2, lobbyY + ceilingHeight/2, 0), wallColor, wallMat, mapFolder)
+	-- Right Wall (East)
+	createPart("WallRight", Vector3.new(2, ceilingHeight, lobbyDepth), Vector3.new(lobbyWidth/2, lobbyY + ceilingHeight/2, 0), wallColor, wallMat, mapFolder)
+	
+	-- 4. 기둥 (Pillars) - REMOVED (User Request: "Stuffy")
+	
+	-- 5. 조명 (Ceiling Lights)
+	local lightFolder = Instance.new("Folder")
+	lightFolder.Name = "LobbyLights"
+	lightFolder.Parent = mapFolder
+	
+	-- Simplify lighting grid since no pillars
+	local lightSpace = 40
+	local halfW = lobbyWidth/2 - 20
+	local halfD = lobbyDepth/2 - 20
+	
+	for x = -halfW, halfW, lightSpace do
+		for z = -halfD, halfD, lightSpace do
+			local lightPart = createPart("CeilingLamp", Vector3.new(8, 1, 8), Vector3.new(x, lobbyY + ceilingHeight - 1, z), Color3.fromRGB(255, 255, 200), Enum.Material.Neon, lightFolder)
+			local pointLight = Instance.new("PointLight")
+			pointLight.Range = 70
+			pointLight.Brightness = 1.0
+			pointLight.Parent = lightPart
+		end
+	end
+	
+	-- 6. 길드 게시판 (로비 중앙 배치 - 4면)
+	MapGenerator.CreateNoticeBoard(0, lobbyY, 0, mapFolder)
+	
+	-- 7. 스폰 (남쪽에서 중앙을 바라봄)
+	local spawnZ = 60 -- Distance from center
+	local spawnPos = Vector3.new(0, lobbyY + 2, spawnZ)
+	local centerPos = Vector3.new(0, lobbyY, 0)
+	
+	MapGenerator.CreateSpawnLocations(mapFolder, 100, spawnPos, centerPos)
+end
+
+-- 게임 맵 생성 (Ground Village)
+function MapGenerator.GenerateProcedural()
+	-- 기존 맵(로비 등) 초기화
+	MapGenerator.ClearMap()
+
+	local mapFolder = Instance.new("Folder")
 	mapFolder.Name = "Map"
 	mapFolder.Parent = workspace
 
@@ -33,10 +151,10 @@ function MapGenerator.Generate()
 	local baseplate = workspace:FindFirstChild("Baseplate") or workspace:FindFirstChild("BasePlate")
 	if baseplate then baseplate:Destroy() end
 
-	local mapSize = Config.Map.Size -- 200
+	local mapSize = Config.Map.Size
 	local halfSize = mapSize / 2
-	local blockSize = 10 -- Main coarse grid size
-
+	local blockSize = 10
+	
 	local groundFolder = Instance.new("Folder")
 	groundFolder.Name = "Ground"
 	groundFolder.Parent = mapFolder
@@ -49,166 +167,710 @@ function MapGenerator.Generate()
 	buildingsFolder.Name = "Buildings"
 	buildingsFolder.Parent = mapFolder
 
-	math.randomseed(os.time())
-	local seed = math.random(1, 10000)
+	-- math.randomseed(os.time())
+	-- math.randomseed(os.time())
+	local seed = os.time() -- [Modified] Dynamic Seed for true randomness
+	math.randomseed(seed)
 
-	-- Road Parameters (Winding) - From Config
+	-- Road Parameters (Winding)
 	local roadWidth = Config.Map.Road.Width
 	local roadAmplitude = Config.Map.Road.Amplitude
 	local roadFrequency = Config.Map.Road.Frequency
 	local roadBlockSize = Config.Map.Road.BlockSize
-
+	
 	local function getRoadX(z)
 		return roadAmplitude * math.sin(z * roadFrequency)
 	end
-
-	-- 지형 높이 함수
+	
+	-- ... (Height logic shared or copied - keeping inline for now)
+	-- [Reverted] Back to Single-Pass Generation
+	
 	local function getHeight(x, z)
 		local noiseScale = 60
-		local heightScale = 20
+		local heightScale = 10 -- [Modified] Reduced from 20 to 10
 		local noiseVal = math.noise(x / noiseScale + seed, z / noiseScale + seed, 0) * heightScale
-
 		local dist = math.sqrt(x^2 + z^2)
 		local valleyFactor = (dist / halfSize) ^ 2
-		local mountainHeight = valleyFactor * 30 -- Reduced height
-		
-		-- Flatten Center Logic
+		local mountainHeight = valleyFactor * 15 -- [Modified] Reduced from 30 to 15
 		local flatRadius = 80
 		local innerFlatRadius = 40
 		local centerDamp = 1
-		
-		if dist < innerFlatRadius then
-			centerDamp = 0
+		if dist < innerFlatRadius then centerDamp = 0
 		elseif dist < flatRadius then
 			local t = (dist - innerFlatRadius) / (flatRadius - innerFlatRadius)
 			centerDamp = t * t * (3 - 2 * t)
 		end
-		
 		local baseHeight = (noiseVal + mountainHeight) * centerDamp
-		
-		-- Road Flattening Logic
 		local roadX = getRoadX(z)
 		local distToRoad = math.abs(x - roadX)
-		local roadInfluence = 45
 		
+		-- [Modified] Force Flatness near Road to prevent clipping
+		if distToRoad < 16 then -- Increased from 12 to 16 for safety
+			return 0
+		end
+		
+		local roadInfluence = 45
 		if distToRoad < roadInfluence then
 			local t = distToRoad / roadInfluence
 			t = t * t * (3 - 2 * t) 
 			baseHeight = baseHeight * t
 		end
-
 		return math.floor(baseHeight)
 	end
 	
-	-- Helper to generate a single terrain block (of any size)
-	local function generateTerrainBlock(x, z, size)
-		local y = getHeight(x, z)
-		
+	local function generateTerrainBlock(x, z, size, overrideY)
+		local y = overrideY or getHeight(x, z)
 		local color
 		local material = Enum.Material.Plastic
-
-		if y < 3 then
-			color = Color3.fromRGB(75, 151, 75)
-			material = Enum.Material.Grass
-		elseif y < 30 then
-			color = Color3.fromRGB(50, 120, 50)
-			material = Enum.Material.Grass
-		else
-			color = Color3.fromRGB(90, 100, 110)
-			material = Enum.Material.Slate
-		end
-
+		if y < 3 then color = Color3.fromRGB(75, 151, 75); material = Enum.Material.Grass
+		elseif y < 30 then color = Color3.fromRGB(50, 120, 50); material = Enum.Material.Grass
+		else color = Color3.fromRGB(90, 100, 110); material = Enum.Material.Slate end
 		createPart("Terrain", Vector3.new(size, size*4, size), Vector3.new(x + size/2, y - size*2, z + size/2), color, material, groundFolder)
 	end
 
-	-- Adaptive Generation Loop
-	-- Iterate carefully using the coarse block size
+	-- [Data Export] Collection Table
+	local mapExportData = {} -- {Type, X, Y, Z, [Extra...]} 1=Terrain, 2=Road, 3=House
+	
+	-- Helper for export
+	local function exportTerrain(x, y, z, size)
+		table.insert(mapExportData, {1, x, y, z, size})
+	end
+	
+	local function exportRoad(x, y, z)
+		table.insert(mapExportData, {2, x, y, z})
+	end
+	
+	local function exportHouse(x, y, z, lx, lz, r, g, b)
+		table.insert(mapExportData, {3, x, y, z, lx, lz, r, g, b})
+	end
+
+	-- [Modified] Two-Pass Generation for Limited House Count
+	local potentialHouseSpots = {}
+
+	-- Adaptive Generation Loop (Phase 1: Terrain + Spot Collection)
 	for x = -halfSize, halfSize - blockSize, blockSize do
 		for z = -halfSize, halfSize - blockSize, blockSize do
-			
 			local centerX = x + blockSize/2
 			local centerZ = z + blockSize/2
-			
-			-- Check if this large block is near the road
-			-- We need to check minimal distance to the road curve within this Z range
-			-- Simple check: Evaluate roadX at centerZ.
-			
 			local roadX = getRoadX(centerZ)
 			local distToRoad = math.abs(centerX - roadX)
 			
-			-- Conservative Check: RoadWidth/2 + BlockSize (diagonal approx) + Buffer
-			-- If close to road, SUBDIVIDE.
+			-- 1. Always generate Natural Terrain (10x10)
+			generateTerrainBlock(x, z, blockSize)
+			local h = getHeight(x, z)
+			exportTerrain(x + blockSize/2, h, z + blockSize/2, blockSize)
+
+			-- 2. Check for Road (Phase 1)
 			if distToRoad < (roadWidth / 2) + 15 then
-				
-				-- SUBDIVIDE into 2x2 blocks
 				for subX = x, x + blockSize - roadBlockSize, roadBlockSize do
 					for subZ = z, z + blockSize - roadBlockSize, roadBlockSize do
-						
 						local subCenterX = subX + roadBlockSize/2
 						local subCenterZ = subZ + roadBlockSize/2
-						
 						local subRoadX = getRoadX(subCenterZ)
 						local subDist = math.abs(subCenterX - subRoadX)
 						
 						if subDist < roadWidth / 2 then
-							-- ROAD BLOCK
-							createPart("RoadBlock", Vector3.new(roadBlockSize, 1, roadBlockSize), Vector3.new(subCenterX, 0.5, subCenterZ), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
-							-- Filler under road
-							createPart("RoadBed", Vector3.new(roadBlockSize, 20, roadBlockSize), Vector3.new(subCenterX, 0 - 10, subCenterZ), Color3.fromRGB(100, 80, 60), Enum.Material.Slate, groundFolder)
-						else
-							-- TERRAIN BLOCK (Small)
-							generateTerrainBlock(subX, subZ, roadBlockSize)
+							-- Generate Road ON TOP of the terrain (Raised to 1.0 to avoid flush with terrain)
+							createPart("RoadBlock", Vector3.new(roadBlockSize, 1, roadBlockSize), Vector3.new(subCenterX, 1.0, subCenterZ), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
+							-- Optional: RoadBed
+							exportRoad(subCenterX, 1.0, subCenterZ)
 						end
+						-- Removing the 'else' branch: No more tiny terrain blocks!
 					end
 				end
+			end
+			
+			-- 3. Check House Spot Candidate
+			local spawnRangeMin = (roadWidth / 2) + 10
+			local spawnRangeMax = (roadWidth / 2) + 60
+			
+			if distToRoad > spawnRangeMin and distToRoad < spawnRangeMax then
+				-- Check Height (Natural Flatness)
+				local y = h -- Reuse height
 				
-			else
-				-- FAR FROM ROAD: Generate Single Large Block (Optimized)
-				generateTerrainBlock(x, z, blockSize)
-				
-				-- REMOVED House and Tree generation per user request.
-				-- Only Terrain and Road remaining.
+				-- Only add if terrain is naturally flat (e.g. < 4)
+				if y < 4 then
+					table.insert(potentialHouseSpots, {x = centerX, y = y, z = centerZ})
+				end
 			end
 		end
 	end
+	
+	-- [Phase 2] Spawn Houses at Fixed Coordinates (User Request)
+	-- [Phase 2] Spawn Houses at Fixed Coordinates (User Request)
+	local fixedHouseLocations = {
+		{x = -40, z = -7, color = Color3.fromRGB(255, 0, 0)},   -- Red House
+		{x = 43, z = 13, color = Color3.fromRGB(0, 0, 255)}      -- Blue House
+	}
+	
+	for _, spot in ipairs(fixedHouseLocations) do
+		-- Calculate Height at this specific spot
+		local y = getHeight(spot.x, spot.z)
+		
+		-- Spawn with Color
+		local house = MapGenerator.CreateBuilding(spot.x, y, spot.z, buildingsFolder, spot.color)
+		
+		-- Rotation Logic
+		if house and house.PrimaryPart then
+			local slope = roadAmplitude * roadFrequency * math.cos(spot.z * roadFrequency)
+			local roadX = getRoadX(spot.z)
+			local lookDir
+			if spot.x > roadX then
+				lookDir = Vector3.new(-1, 0, slope) -- Right Side
+			else
+				lookDir = Vector3.new(1, 0, -slope) -- Left Side
+			end
+			local currentPos = house.PrimaryPart.Position
+			local targetPos = currentPos + lookDir
+			house:PivotTo(CFrame.lookAt(currentPos, targetPos))
+			
+			-- Export House with Color
+			local c = spot.color
+			exportHouse(spot.x, y, spot.z, lookDir.X, lookDir.Z, c.R, c.G, c.B)
+			
+			-- [Added] Bench next to Blue House (Closer to Road, Aligned)
+			if spot.color.B > 0.9 and spot.color.R < 0.1 then
+				local benchZ = spot.z - 18
+				local benchX = spot.x - 22 -- Closer to road
+				
+				local bench = createPart("Bench", Vector3.new(2, 1.5, 6), Vector3.new(benchX, y + 0.75, benchZ), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, mapFolder)
+				
+				-- Align with Road Logic
+				-- Slope dx/dz = A * f * cos(z * f)
+				local s = roadAmplitude * roadFrequency * math.cos(benchZ * roadFrequency)
+				local tangent = Vector3.new(s, 0, 1) -- Road Tangent
+				bench.CFrame = CFrame.lookAt(bench.Position, bench.Position + tangent)
+				
+				-- [Added] Grandfather NPC sitting on bench
+				-- Offset slightly up (seat surface + hip height). Bench Top is ~ y+1.5. Hips ~ +1.
+				local sitCF = bench.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(0, math.rad(-90), 0)
+				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
+			end
+			
+			-- [Added] Street Stall (Pojangmacha) near Red House
+			if spot.color.R > 0.9 and spot.color.B < 0.1 then
+				-- Red House Detected -> Place Stall nearby (e.g. Left side, closer to road)
+				local stallZ = spot.z + 18
+				local stallX = spot.x + 22 -- Opposite direction of blue house logic roughly
+				-- Find Road Y at this spot? Or just use Y (Ground).
+				-- Call Helper
+				local stall = MapGenerator.CreateStreetStall(stallX, y, stallZ, mapFolder)
+				
+				-- Align to road?
+				if stall and stall.PrimaryPart then
+					local s = roadAmplitude * roadFrequency * math.cos(stallZ * roadFrequency)
+					local tangent = Vector3.new(s, 0, 1)
+					stall:PivotTo(CFrame.lookAt(stall.PrimaryPart.Position, stall.PrimaryPart.Position + tangent) * CFrame.Angles(0, math.rad(90), 0))
+					
+					-- [Added] Busy Chef NPC
+					-- Position: Behind the counter.
+					-- Stall Counter is at (x, y+3, z). Depth 4.
+					-- "Behind" means towards the road? No, Stall faces Road. Chef stands BEHIND counter, facing Road.
+					-- Stall Forward = Road Side. Back = Service Side.
+					-- We rotated Stall 90 deg relative to Tangent (Road).
+					-- Let's place Chef 3 studs "Back" from Stall Center.
+					-- Let's place Chef 3 studs "Back" from Stall Center.
+					local chefOffset = stall.PrimaryPart.CFrame.LookVector * -3
+					local chefPos = stall.PrimaryPart.Position + chefOffset
+					-- Height: Ground (y + 3 is counter top, so y + 1 is torso center).
+					
+					-- [Fixed] Target must be at same Height (y) to avoid looking up (Pitch) -> Leaning Back
+					local targetLook = Vector3.new(stall.PrimaryPart.Position.X, y, stall.PrimaryPart.Position.Z)
+					local chefCF = CFrame.lookAt(Vector3.new(chefPos.X, y, chefPos.Z), targetLook)
+					MapGenerator.SpawnChef(chefCF, mapFolder)
+				end
+			end
+			-- [DISABLED] User Request: No auto-generated trees
+			-- for i = 1, 3 do
+			-- 	local attempts = 0
+			-- 	local placed = false
+			-- 	while attempts < 5 and not placed do
+			-- 		attempts += 1
+			-- 		local treeOffsetX = math.random(-40, 40)
+			-- 		local treeOffsetZ = math.random(-40, 40)
+			-- 		-- Avoid placing inside house (simple check: keep distance > 18)
+			-- 		if math.abs(treeOffsetX) > 18 or math.abs(treeOffsetZ) > 18 then
+			-- 			local tx, ty, tz = spot.x + treeOffsetX, y, spot.z + treeOffsetZ
+			-- 			local style = math.random(1, 3) -- [Restored] Random Style
+						
+			-- 			MapGenerator.SpawnTree(tx, ty, tz, mapFolder, style)
+			-- 			table.insert(mapExportData, {4, tx, ty, tz, style}) -- Type 4 = Tree
+			-- 			placed = true
+			-- 		end
+			-- 	end
+			-- end
+		end
+	end
+	
+	-- Create Tunnels at both ends
+	MapGenerator.CreateTunnels(mapFolder, mapSize)
+	
+	-- 스폰 위치 (Village Spawn)
+	MapGenerator.CreateSpawnLocations(mapFolder, mapSize, Vector3.new(0, 8, 0)) -- Ground Spawn
 
-	-- Tunnels at ends
+	-- 경계
+	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
+	
+	-- [Added] Wandering Cats (Spawn ~10 randomly)
+	for i = 1, 10 do
+		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
+		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
+		-- Check Road? Cats can cross road. Just spawn on ground (Y=0 -> Cat Y=1)
+		local groundY = 0 
+		local catCF = CFrame.new(cx, groundY + 1, cz)
+		MapGenerator.SpawnCat(catCF, mapFolder)
+	end
+	
+	-- [CACHE & EXPORT]
+	MapGenerator.CurrentData = mapExportData
+	return mapExportData
+end
+
+function MapGenerator.LoadMapFromData(mapData)
+	print("Loading Map from DataStore...")
+	MapGenerator.ClearMap()
+	MapGenerator.CurrentData = mapData -- Cache loaded data too
+
+	local mapFolder = Instance.new("Folder")
+	mapFolder.Name = "Map"
+	mapFolder.Parent = workspace
+
+	-- 기본 Baseplate 제거
+	local baseplate = workspace:FindFirstChild("Baseplate") or workspace:FindFirstChild("BasePlate")
+	if baseplate then baseplate:Destroy() end
+	
+	local mapSize = Config.Map.Size
+	local blockSize = 10
+	local roadBlockSize = Config.Map.Road.BlockSize
+	
+	local groundFolder = Instance.new("Folder")
+	groundFolder.Name = "Ground"
+	groundFolder.Parent = mapFolder
+	
+	local roadFolder = Instance.new("Folder")
+	roadFolder.Name = "Roads"
+	roadFolder.Parent = mapFolder
+	
+	local buildingsFolder = Instance.new("Folder")
+	buildingsFolder.Name = "Buildings"
+	buildingsFolder.Parent = mapFolder
+	
+	-- Reconstruct Map
+	for _, item in ipairs(mapData) do
+		local typeId = item[1]
+		local x, y, z = item[2], item[3], item[4]
+		
+		if typeId == 1 then -- Terrain
+			local size = item[5] or 10 -- [Added] Load size (default 10)
+			local color
+			local material = Enum.Material.Plastic
+			if y < 3 then color = Color3.fromRGB(75, 151, 75); material = Enum.Material.Grass
+			elseif y < 30 then color = Color3.fromRGB(50, 120, 50); material = Enum.Material.Grass
+			else color = Color3.fromRGB(90, 100, 110); material = Enum.Material.Slate end
+			createPart("Terrain", Vector3.new(size, 40, size), Vector3.new(x, y - 20, z), color, material, groundFolder)
+			
+		elseif typeId == 2 then -- Road
+			createPart("RoadBlock", Vector3.new(2, 1, 2), Vector3.new(x, y, z), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
+			-- Removed RoadBed reconstruction for now to keep consistent
+			-- createPart("RoadBed", Vector3.new(2, 20, 2), Vector3.new(x, y - 10, z), Color3.fromRGB(100, 80, 60), Enum.Material.Slate, groundFolder)
+			
+		elseif typeId == 3 then -- House {3, x, y, z, lx, lz, r, g, b}
+			local lx, lz = item[5], item[6]
+			local color = nil
+			if item[7] then
+				color = Color3.new(item[7], item[8], item[9])
+			end
+			
+			local house = MapGenerator.CreateBuilding(x, y, z, buildingsFolder, color)
+			if house and house.PrimaryPart then
+				local currentPos = house.PrimaryPart.Position
+				local targetPos = currentPos + Vector3.new(lx, 0, lz)
+				house:PivotTo(CFrame.lookAt(currentPos, targetPos))
+			end
+
+			-- [Added] Bench next to Blue House (Reconstruct)
+			if item[9] and item[9] > 0.9 and item[7] < 0.1 then 
+				-- Blue House Side (Forward + Aligned)
+				local benchZ = z - 18
+				local benchX = x - 22
+				local bench = createPart("Bench", Vector3.new(2, 1.5, 6), Vector3.new(benchX, y + 0.75, benchZ), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, mapFolder)
+				
+				-- Recalculate Slope (Config required)
+				local amp = Config.Map.Road.Amplitude
+				local freq = Config.Map.Road.Frequency
+				local s = amp * freq * math.cos(benchZ * freq)
+				local tangent = Vector3.new(s, 0, 1)
+				bench.CFrame = CFrame.lookAt(bench.Position, bench.Position + tangent)
+				
+				-- [Added] Grandfather NPC (Reconstruct)
+				local sitCF = bench.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(0, math.rad(-90), 0)
+				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
+				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
+			end
+			
+			-- [Added] Street Stall (Reconstruct near Red House)
+			if item[7] > 0.9 and item[9] < 0.1 then -- Red R > 0.9, B < 0.1
+				local stallZ = z + 18
+				local stallX = x + 22 
+				local stall = MapGenerator.CreateStreetStall(stallX, y, stallZ, mapFolder)
+				
+				local amp = Config.Map.Road.Amplitude
+				local freq = Config.Map.Road.Frequency
+				local s = amp * freq * math.cos(stallZ * freq)
+				local tangent = Vector3.new(s, 0, 1)
+				if stall and stall.PrimaryPart then
+					stall:PivotTo(CFrame.lookAt(stall.PrimaryPart.Position, stall.PrimaryPart.Position + tangent) * CFrame.Angles(0, math.rad(90), 0))
+					
+					-- [Added] Busy Chef NPC (Reconstruct)
+					local chefOffset = stall.PrimaryPart.CFrame.LookVector * -3
+					local chefPos = stall.PrimaryPart.Position + chefOffset
+					
+					-- [Fixed] Look horizontal
+					local targetLook = Vector3.new(stall.PrimaryPart.Position.X, y, stall.PrimaryPart.Position.Z)
+					local chefCF = CFrame.lookAt(Vector3.new(chefPos.X, y, chefPos.Z), targetLook)
+					MapGenerator.SpawnChef(chefCF, mapFolder)
+				end
+			end
+			
+		elseif typeId == 4 then -- [Modified] Tree with Style
+			-- Legacy Support: If style missing, pick random instead of default 1
+			local style = item[5] or math.random(1, 3) 
+			MapGenerator.SpawnTree(x, y, z, groundFolder, style)
+		end
+	end
+	
+	MapGenerator.CreateSpawnLocations(mapFolder, mapSize, Vector3.new(0, 8, 0))
+	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
+	MapGenerator.CreateTunnels(mapFolder, mapSize) -- [Added] Regenerate Tunnels
+	
+	-- [Added] Wandering Cats (Spawn ~10 randomly)
+	for i = 1, 10 do
+		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
+		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
+		local catCF = CFrame.new(cx, 1, cz)
+		MapGenerator.SpawnCat(catCF, mapFolder)
+	end
+end
+
+-- 터널 생성 (Shared)
+function MapGenerator.CreateTunnels(parent, mapSize)
+	local halfSize = mapSize / 2
+	local roadWidth = Config.Map.Road.Width
+	local roadAmplitude = Config.Map.Road.Amplitude
+	local roadFrequency = Config.Map.Road.Frequency
+	
+	local function getRoadX(z)
+		return roadAmplitude * math.sin(z * roadFrequency)
+	end
+	
 	local function createTunnel(z, roadX)
 		local tunnelModel = Instance.new("Model")
 		tunnelModel.Name = "Tunnel"
-		tunnelModel.Parent = mapFolder
+		tunnelModel.Parent = parent
 		
-		-- Tunnel Frame Dimensions
 		local tWidth = roadWidth + 10
 		local tHeight = 20
 		local tLength = 10
 		local wallThickness = 4
 		
-		-- Left Wall
 		createPart("WallL", Vector3.new(wallThickness, tHeight, tLength), Vector3.new(roadX - roadWidth/2 - wallThickness/2, tHeight/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
-		-- Right Wall
 		createPart("WallR", Vector3.new(wallThickness, tHeight, tLength), Vector3.new(roadX + roadWidth/2 + wallThickness/2, tHeight/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
-		-- Ceiling
 		createPart("Ceiling", Vector3.new(tWidth + wallThickness*2, wallThickness, tLength), Vector3.new(roadX, tHeight + wallThickness/2, z), Color3.fromRGB(80, 80, 80), Enum.Material.Concrete, tunnelModel)
-		
-		-- Black Void (Blockade)
-		local voidPart = createPart("TunnelVoid", Vector3.new(tWidth - 2, tHeight, 2), Vector3.new(roadX, tHeight/2, z), Color3.fromRGB(0, 0, 0), Enum.Material.Neon, tunnelModel)
-		
+		createPart("TunnelVoid", Vector3.new(tWidth - 2, tHeight, 2), Vector3.new(roadX, tHeight/2, z), Color3.fromRGB(0, 0, 0), Enum.Material.Neon, tunnelModel)
 	end
 	
-	-- Create Tunnels at both ends
-	-- Slightly inside the map so player sees them before falling off
-	-- Map halfSize is 100. Let's place at +/- 95
 	createTunnel(-halfSize + 5, getRoadX(-halfSize + 5))
 	createTunnel(halfSize - 5, getRoadX(halfSize - 5))
+end
 
-	-- 스폰 위치
-	MapGenerator.CreateSpawnLocations(mapFolder, mapSize)
 
-	-- 경계
-	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 
-	-- print("Rural Valley Map Generated!")
+-- 할아버지 NPC 생성 (Standard R6 Style)
+function MapGenerator.SpawnGrandpa(locationCF, parent)
+	local model = Instance.new("Model")
+	model.Name = "Grandpa"
+	model.Parent = parent
+	
+	-- Humanoid for "Character" look
+	local hum = Instance.new("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None -- Hide Name
+	hum.Parent = model
+	
+	-- Colors
+	local skinColor = Color3.fromRGB(240, 200, 180)
+	local shirtColor = Color3.fromRGB(200, 200, 200)
+	local pantsColor = Color3.fromRGB(80, 70, 60)
+	local hairColor = Color3.fromRGB(150, 150, 150)
+	
+	-- Helper
+	local function makePart(name, size, color, cf)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.Plastic
+		p.Anchored = true
+		p.CanCollide = false
+		p.CFrame = locationCF * cf
+		p.Parent = model
+		return p
+	end
+	
+	-- 1. Torso (2x2x1)
+	-- Pivot is center of bench seat (y+1.8). Torso Center is higher.
+	-- Bench Y is "Seat Surface". Torso Center is +1 (Half Torso).
+	local torso = makePart("Torso", Vector3.new(2, 2, 1), shirtColor, CFrame.new(0, 1.0, 0))
+	
+	-- 2. Head (1.25x1.25x1.25) + Mesh
+	local head = makePart("Head", Vector3.new(1, 1, 1), skinColor, CFrame.new(0, 2.5, 0))
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	mesh.Parent = head
+	local face = Instance.new("Decal")
+	face.Texture = "rbxasset://textures/face.png"
+	face.Face = Enum.NormalId.Front
+	face.Parent = head
+	
+	-- Hair (Block Hat)
+	local hair = makePart("Hair", Vector3.new(1.3, 0.4, 1.3), hairColor, CFrame.new(0, 3.2, 0))
+	
+	-- 3. Arms (1x2x1)
+	makePart("Left Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(-1.5, 1.0, 0))
+	makePart("Right Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(1.5, 1.0, 0))
+	
+	-- 4. Legs (1x2x1) - Sitting (Standard R6 Sit: Legs forward)
+	-- Torso Bottom is at 0.0 offset. Leg starts there.
+	-- Leg Center would be Z+1 (Forward), Y+0 (Level with Torso bottom? No slightly down?)
+	-- Actually: Hip is Torso Bottom. Leg is attached there.
+	-- If Leg is horizontal, Center is Z=1.
+	makePart("Left Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(-0.5, 0.0, -1.0) * CFrame.Angles(math.rad(-90), 0, 0))
+	makePart("Right Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(0.5, 0.0, -1.0) * CFrame.Angles(math.rad(-90), 0, 0))
+end
+
+-- 포장마차 생성
+function MapGenerator.CreateStreetStall(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "StreetStall"
+	model.Parent = parent
+	
+	-- Colors
+	local tentColor = Color3.fromRGB(230, 80, 50) -- Red/Orange Tent
+	local metalColor = Color3.fromRGB(180, 180, 180) -- Silver/Metal
+	local woodColor = Color3.fromRGB(200, 150, 100) -- Light Wood Counter
+	
+	-- Helper
+	local function addPart(name, size, pos, color, mat, folder)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Position = pos
+		p.Color = color
+		p.Material = mat
+		p.Anchored = true
+		p.Parent = folder
+		return p
+	end
+	
+	-- 1. Counter (Table)
+	-- height ~ 3 studs
+	local counterH = 3
+	local counterW = 8
+	local counterD = 4
+	local counter = addPart("Counter", Vector3.new(counterW, 0.5, counterD), Vector3.new(x, y + counterH, z), woodColor, Enum.Material.Wood, model)
+	model.PrimaryPart = counter
+	
+	-- Legs (4)
+	local legH = counterH - 0.25
+	local legSize = 0.4
+	addPart("LegFL", Vector3.new(legSize, legH, legSize), Vector3.new(x - counterW/2 + 0.5, y + legH/2, z - counterD/2 + 0.5), metalColor, Enum.Material.Metal, model)
+	addPart("LegFR", Vector3.new(legSize, legH, legSize), Vector3.new(x + counterW/2 - 0.5, y + legH/2, z - counterD/2 + 0.5), metalColor, Enum.Material.Metal, model)
+	addPart("LegBL", Vector3.new(legSize, legH, legSize), Vector3.new(x - counterW/2 + 0.5, y + legH/2, z + counterD/2 - 0.5), metalColor, Enum.Material.Metal, model)
+	addPart("LegBR", Vector3.new(legSize, legH, legSize), Vector3.new(x + counterW/2 - 0.5, y + legH/2, z + counterD/2 - 0.5), metalColor, Enum.Material.Metal, model)
+	
+	-- 2. Tent Poles (4 Corners, taller)
+	local poleH = 7
+	local poleY = y + poleH/2
+	local poleOffset = 0.2
+	addPart("PoleFL", Vector3.new(0.2, poleH, 0.2), Vector3.new(x - counterW/2 + poleOffset, poleY, z - counterD/2 + poleOffset), metalColor, Enum.Material.Metal, model)
+	addPart("PoleFR", Vector3.new(0.2, poleH, 0.2), Vector3.new(x + counterW/2 - poleOffset, poleY, z - counterD/2 + poleOffset), metalColor, Enum.Material.Metal, model)
+	addPart("PoleBL", Vector3.new(0.2, poleH, 0.2), Vector3.new(x - counterW/2 + poleOffset, poleY, z + counterD/2 - poleOffset), metalColor, Enum.Material.Metal, model)
+	addPart("PoleBR", Vector3.new(0.2, poleH, 0.2), Vector3.new(x + counterW/2 - poleOffset, poleY, z + counterD/2 - poleOffset), metalColor, Enum.Material.Metal, model)
+	
+	-- 3. Tent Roof (Sloped or Flat with fringe)
+	-- Main Roof
+	addPart("Roof", Vector3.new(counterW + 1, 0.5, counterD + 1), Vector3.new(x, y + poleH, z), tentColor, Enum.Material.Fabric, model)
+	-- Stripes (Optional visual detail: White blocks?)
+	addPart("Stripe", Vector3.new(counterW + 1.2, 0.6, 1), Vector3.new(x, y + poleH, z), Color3.fromRGB(240, 240, 240), Enum.Material.Fabric, model)
+	
+	-- 4. Wheels (Cart style)
+	local wheelSize = 2.5
+	local wheelZ = z
+	local wheelOffset = counterW/2
+	local w1 = addPart("WheelL", Vector3.new(0.5, wheelSize, wheelSize), Vector3.new(x - wheelOffset, y + wheelSize/2, z), Color3.fromRGB(20, 20, 20), Enum.Material.Rubber, model)
+	w1.Shape = Enum.PartType.Cylinder
+	w1.Orientation = Vector3.new(0, 0, 90)
+	
+	local w2 = addPart("WheelR", Vector3.new(0.5, wheelSize, wheelSize), Vector3.new(x + wheelOffset, y + wheelSize/2, z), Color3.fromRGB(20, 20, 20), Enum.Material.Rubber, model)
+	w2.Shape = Enum.PartType.Cylinder
+	w2.Orientation = Vector3.new(0, 0, 90)
+	
+	-- 5. Food Props
+	-- Tteokbokki Plate (Red)
+	addPart("Plate", Vector3.new(1.5, 0.2, 1), Vector3.new(x - 1.5, y + counterH + 0.35, z + 0.5), Color3.fromRGB(255, 255, 255), Enum.Material.Plastic, model)
+	addPart("Food", Vector3.new(1.2, 0.2, 0.8), Vector3.new(x - 1.5, y + counterH + 0.55, z + 0.5), Color3.fromRGB(200, 50, 0), Enum.Material.Neon, model) -- Spicy Red
+	
+	-- Odeng Pot (Metal + Sticks)
+	addPart("Pot", Vector3.new(1.2, 0.6, 1.2), Vector3.new(x + 1.5, y + counterH + 0.5, z + 0.5), Color3.fromRGB(150, 150, 150), Enum.Material.Metal, model)
+	-- Sticks
+	for i = 1, 3 do
+		addPart("Stick", Vector3.new(0.1, 0.8, 0.1), Vector3.new(x + 1.2 + (i*0.2), y + counterH + 1.0, z + 0.5), Color3.fromRGB(200, 180, 150), Enum.Material.Wood, model)
+	end
+	
+	return model
+end
+
+-- 나무 생성 (3 Random Styles)
+function MapGenerator.SpawnTree(x, y, z, parent, style)
+	style = style or 1
+	
+	local model = Instance.new("Model")
+	model.Name = "Tree_Type" .. style
+	model.Parent = parent
+	
+	if style == 1 then
+		-- Style 1: Round Oak (Existing)
+		local trunkHeight = math.random(13, 17)
+		local trunk = Instance.new("Part")
+		trunk.Name = "Trunk"
+		-- [Fixed] Cylinder Size X is Height when rotated 90 Z
+		trunk.Size = Vector3.new(trunkHeight, 3, 3)
+		trunk.Shape = Enum.PartType.Cylinder
+		trunk.Position = Vector3.new(x, y + trunkHeight/2 - 2, z)
+		trunk.Orientation = Vector3.new(0, 0, 90)
+		trunk.Color = Color3.fromRGB(80, 50, 30)
+		trunk.Material = Enum.Material.Wood
+		trunk.Anchored = true
+		trunk.Parent = model
+		
+		-- Leaves (Balls with Cylinder Trunk works best turned sideways? Yes Z axis usually)
+		-- Re-verify Cylinder orientation. 0,0,90 puts height on X?
+		-- Visuals were fine before, keeping logic.
+		
+		local leafColor = Color3.fromRGB(math.random(60, 100), math.random(150, 200), math.random(60, 100))
+		local topY = y + trunkHeight - 2
+		
+		local function makeLeaf(size, pos)
+			local leaf = Instance.new("Part")
+			leaf.Size = Vector3.new(size, size, size)
+			leaf.Shape = Enum.PartType.Ball
+			leaf.Position = pos
+			leaf.Color = leafColor
+			leaf.Material = Enum.Material.Grass
+			leaf.Anchored = true
+			leaf.Parent = model
+		end
+		makeLeaf(14, Vector3.new(x, topY, z))
+		for i = 1, 3 do
+			makeLeaf(8, Vector3.new(x + math.random(-4,4), topY + math.random(-2,4), z + math.random(-4,4)))
+		end
+		
+	elseif style == 2 then
+		print("DEBUG: Executing Style 2 block (Pine)")
+		-- Style 2: Simple Pine (2 Blocks + Visible Trunk)
+		local trunkHeight = math.random(12, 16)
+		local trunk = Instance.new("Part")
+		trunk.Size = Vector3.new(2, trunkHeight, 2)
+		trunk.Position = Vector3.new(x, y + trunkHeight/2, z) -- Sit on ground
+		trunk.Color = Color3.fromRGB(60, 40, 20)
+		trunk.Material = Enum.Material.Wood
+		trunk.Anchored = true
+		trunk.Parent = model
+		
+		local leafColor = Color3.fromRGB(30, 80, 40)
+		local leafMat = Enum.Material.Grass
+		
+		-- Two distinct blocks for leaves
+		-- 1. Bottom Block (Wide) - Starts higher up to show trunk
+		local bottomY = y + trunkHeight * 0.4 -- Start 40% up the trunk
+		local bottomSize = 10
+		local bottomH = 6
+		
+		local b1 = Instance.new("Part")
+		b1.Size = Vector3.new(bottomSize, bottomH, bottomSize)
+		b1.Position = Vector3.new(x, bottomY + bottomH/2, z)
+		b1.Color = leafColor
+		b1.Material = leafMat
+		b1.Anchored = true
+		b1.Parent = model
+		
+		-- 2. Top Block (Narrower)
+		local topSize = 6
+		local topH = 6
+		local b2 = Instance.new("Part")
+		b2.Size = Vector3.new(topSize, topH, topSize)
+		b2.Position = Vector3.new(x, bottomY + bottomH + topH/2, z) -- Stacked on top
+		b2.Color = leafColor
+		b2.Material = leafMat
+		b2.Anchored = true
+		b2.Parent = model
+		
+	elseif style == 3 then
+		print("DEBUG: Executing Style 3 block (Birch)")
+		-- Style 3: Birch/Poplar (Tall, Thin, White-ish)
+		local trunkHeight = math.random(16, 22)
+		local trunk = Instance.new("Part")
+		-- [Fixed] Cylinder Size X is Height when rotated 90 Z
+		trunk.Size = Vector3.new(trunkHeight, 1.5, 1.5)
+		trunk.Shape = Enum.PartType.Cylinder
+		trunk.Position = Vector3.new(x, y + trunkHeight/2 - 1, z)
+		trunk.Orientation = Vector3.new(0, 0, 90)
+		trunk.Color = Color3.fromRGB(220, 220, 200) -- Whiteish
+		trunk.Material = Enum.Material.Wood
+		trunk.Anchored = true
+		trunk.Parent = model
+		
+		local leafColor = Color3.fromRGB(230, 180, 80) -- Autumn/Yellowish or Light Green? Let's go Bright Green
+		leafColor = Color3.fromRGB(100, 200, 100)
+		
+		local topY = y + trunkHeight - 4
+		-- Tall cluster
+		local leaf = Instance.new("Part")
+		leaf.Size = Vector3.new(6, 12, 6)
+		leaf.Position = Vector3.new(x, topY + 4, z)
+		leaf.Shape = Enum.PartType.Block -- Boxy tall tree
+		leaf.Color = leafColor
+		leaf.Material = Enum.Material.Grass
+		leaf.Anchored = true
+		leaf.Parent = model
+	end
+end
+
+function MapGenerator.GenerateVillage()
+	if not CityMapStore then
+		print("⚠️ DataStore invalid. Generating new procedural map (Not Saving)...")
+		MapGenerator.GenerateProcedural()
+		return
+	end
+
+	local success, savedMap = pcall(function()
+		return CityMapStore:GetAsync("Map_v1")
+	end)
+	
+	-- if success and savedMap then
+	if false then -- [FORCE RESET] Ignore saved data to regenerate terrain correctly
+		print("✅ Found saved map data! Loading...")
+		MapGenerator.LoadMapFromData(savedMap)
+		
+		
+		-- [Removed] PopulateTreesIfMissing (Obsolete)
+	else
+		print("❌ No saved map. Generating new procedural map... (Not Saving)")
+		local mapData = MapGenerator.GenerateProcedural()
+		
+		-- [Modified] Do NOT Auto-Save. Wait for Button Click.
+		-- Map is generated and cached in MapGenerator.CurrentData automatically by GenerateProcedural
+	end
 end
 -- 가로등 배치
 function MapGenerator.CreateStreetLamps(parent, mapSize, roadWidth, blockSize)
@@ -287,23 +949,30 @@ function MapGenerator.CreatePark(x, y, z, parent)
 	model.Name = "Park"
 	model.Parent = parent
 	
-	-- 잔디밭 (약간 솟아오름)
-	local parkSize = 40
+	-- 잔디밭 (Large Plaza - 100x100)
+	local parkSize = 100
 	createPart("Grass", Vector3.new(parkSize, 0.5, parkSize), Vector3.new(x, y + 0.25, z), Color3.fromRGB(60, 160, 60), Enum.Material.Grass, model)
 	
 	-- 분수대 (중앙)
 	MapGenerator.CreateFountain(x, y + 0.5, z, model)
 	
-	-- 나무 배치 (4면)
-	local treeOffset = 15
-	MapGenerator.CreateTree(x - treeOffset, y, z - treeOffset, model)
-	MapGenerator.CreateTree(x + treeOffset, y, z - treeOffset, model)
-	MapGenerator.CreateTree(x - treeOffset, y, z + treeOffset, model)
-	MapGenerator.CreateTree(x + treeOffset, y, z + treeOffset, model)
+	-- 길드 게시판 (남쪽 배치)
+	MapGenerator.CreateNoticeBoard(x, y + 0.5, z + 35, model)
 	
-	-- 벤치 (생략 가능하지만 간단하게)
-	createPart("Bench1", Vector3.new(6, 1.5, 2), Vector3.new(x, y + 0.75, z - 10), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
-	createPart("Bench2", Vector3.new(6, 1.5, 2), Vector3.new(x, y + 0.75, z + 10), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
+	-- 나무 배치 (4면 가장자리)
+	-- 나무 배치 (4면 가장자리)
+	-- 나무 배치 (4면 가장자리)
+	-- [DISABLED] User Request: No auto-generated trees in park
+	-- local treeOffset = 40
+	-- MapGenerator.SpawnTree(x - treeOffset, y, z - treeOffset, model, math.random(1, 3))
+	-- MapGenerator.SpawnTree(x + treeOffset, y, z - treeOffset, model, math.random(1, 3))
+	-- MapGenerator.SpawnTree(x - treeOffset, y, z + treeOffset, model, math.random(1, 3))
+	-- MapGenerator.SpawnTree(x + treeOffset, y, z + treeOffset, model, math.random(1, 3))
+	
+	-- 벤치 (더 많이 배치)
+	local benchDist = 20
+	createPart("Bench1", Vector3.new(8, 1.5, 2), Vector3.new(x - benchDist, y + 0.75, z), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
+	createPart("Bench2", Vector3.new(8, 1.5, 2), Vector3.new(x + benchDist, y + 0.75, z), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, model)
 end
 
 -- 분수대 생성
@@ -379,21 +1048,32 @@ function MapGenerator.CreateBoundaryZone(parent, mapSize)
 end
 
 -- 스폰 위치 생성 함수 (마을 중앙 광장 근처)
-function MapGenerator.CreateSpawnLocations(parent, mapSize)
-	-- [Modified] Create Single Safe Spawn Point (Off-road)
-	local spawnY = 8
-	local safePos = Vector3.new(-30, spawnY, 0) -- 30 studs West (Avoid Road)
+function MapGenerator.CreateSpawnLocations(parent, mapSize, overridePos, lookAtTarget)
+	-- [Modified] Create Single Safe Spawn Point
+	-- If overridePos is provided (e.g. for Lobby), use it. Otherwise default to ground center.
+	local defaultPos = Vector3.new(0, 8, -30)
+	local safePos = overridePos or defaultPos
+	
+	-- Determine LookAt
+	-- If lookAtTarget provided, use it.
+	local facePos = lookAtTarget 
+	if not facePos then
+		-- Default fall back: Look Forward (-Z) relative to spawn
+		facePos = safePos + Vector3.new(0, 0, -10)
+	end
+	
+	-- Ensure Y is same to avoid looking up/down
+	local lookAtFlat = Vector3.new(facePos.X, safePos.Y, facePos.Z)
 	
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "MainSpawn"
-	spawn.Size = Vector3.new(6, 1, 6)
-	spawn.CFrame = CFrame.new(safePos)
+	spawn.Size = Vector3.new(8, 1, 8)
+	spawn.CFrame = CFrame.lookAt(safePos, lookAtFlat)
 	spawn.Anchored = true
 	spawn.CanCollide = false
 	spawn.CanQuery = false
 	spawn.Neutral = true
-	spawn.Transparency = 0.5 -- Keeping visible for verification
-	spawn.Color = Color3.fromRGB(0, 255, 0)
+	spawn.Transparency = 1 
 	spawn.Parent = parent
 	
 	-- [Fix] Remove "Tornado/Star" Decal
@@ -408,15 +1088,88 @@ function MapGenerator.CreateSpawnLocations(parent, mapSize)
 	end
 end
 
-function MapGenerator.CreateBuilding(x, y, z, parent)
+-- 게시판 생성 (Central 4-Sided Kiosk)
+function MapGenerator.CreateNoticeBoard(x, y, z, parent)
+	local model = Instance.new("Model")
+	model.Name = "GuildBoardModel"
+	model.Parent = parent
+	
+	-- 4면 게시판 (Central Pillar Style)
+	local coreSize = 20 -- Width/Depth
+	local coreHeight = 20 -- [Modified] Height halved
+	local legHeight = 0   -- [Modified] Attached to ground (No legs)
+	
+	-- 1. 중앙 기둥/코어
+	createPart("CoreMain", Vector3.new(coreSize, coreHeight, coreSize), Vector3.new(x, y + legHeight + coreHeight/2, z), Color3.fromRGB(80, 60, 40), Enum.Material.WoodPlanks, model)
+	
+	-- 2. 지붕 (Pagoda Style / Overhang)
+	local roofSize = coreSize + 10
+	createPart("Roof", Vector3.new(roofSize, 2, roofSize), Vector3.new(x, y + legHeight + coreHeight + 1, z), Color3.fromRGB(60, 40, 30), Enum.Material.Slate, model)
+	
+	-- 3. 4면 Canvas & GUI
+	-- offsets for 4 faces: Front(Z+), Back(Z-), Right(X+), Left(X-)
+	-- Wait, Front in Roblox is usually -Z. Let's align logically.
+	
+	local faces = {
+		{id="Front", pos=Vector3.new(0, 0, -coreSize/2 - 0.2), rot=Vector3.new(0, 0, 0)},     -- Looking at -Z face
+		{id="Back",  pos=Vector3.new(0, 0, coreSize/2 + 0.2),  rot=Vector3.new(0, 180, 0)},   -- Looking at +Z face
+		{id="Right", pos=Vector3.new(coreSize/2 + 0.2, 0, 0),  rot=Vector3.new(0, -90, 0)},   -- Looking at +X face
+		{id="Left",  pos=Vector3.new(-coreSize/2 - 0.2, 0, 0), rot=Vector3.new(0, 90, 0)},  -- Looking at -X face
+	}
+	
+	for _, face in ipairs(faces) do
+	local canvas = createPart("Canvas_"..face.id, Vector3.new(coreSize - 2, coreHeight - 4, 0.4), 
+			Vector3.new(x + face.pos.X, y + legHeight + coreHeight/2, z + face.pos.Z), 
+			Color3.fromRGB(230, 220, 210), Enum.Material.SmoothPlastic, model) -- Softer color
+		
+		canvas.Orientation = face.rot
+		canvas.Name = "GuildBoardPart" -- Shared Name for Script interaction
+		
+		local detector = Instance.new("ClickDetector")
+		detector.MaxActivationDistance = 80
+		detector.Parent = canvas
+		
+		-- SurfaceGui
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "BoardGui"
+		gui.Face = Enum.NormalId.Front -- Oriented with Part
+		gui.CanvasSize = Vector2.new(1000, 2000) -- Portrait mode
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+		gui.LightInfluence = 1.0 -- 조명 영향 100% (눈부심 제거, 종이 질감)
+		gui.Parent = canvas
+		
+		-- Content (Simplified for 4 sides)
+		-- Content (Simplified for 4 sides)
+		local title = Instance.new("TextLabel")
+		title.Text = "NOTICE\n(" .. face.id .. ")"
+		title.Size = UDim2.new(1, 0, 0.15, 0) -- Slightly taller area
+		title.Position = UDim2.new(0, 0, 0.05, 0) -- [Modified] Top Padding
+		title.BackgroundTransparency = 1
+		title.TextColor3 = Color3.fromRGB(200, 50, 50)
+		title.TextSize = 90 -- Slightly smaller to fit padding
+		title.Font = Enum.Font.LuckiestGuy
+		title.Parent = gui
+		
+		local img = Instance.new("ImageLabel")
+		img.Image = "rbxassetid://9024035651"
+		img.Size = UDim2.new(0.9, 0, 0.6, 0) -- Larger Image
+		img.Position = UDim2.new(0.05, 0, 0.25, 0) -- Moved down
+		img.ScaleType = Enum.ScaleType.Fit
+		img.Parent = gui
+		
+		-- [Modified] Removed Bottom Text ("Find the Hidden Cats!") as requested
+	end
+end
+
+function MapGenerator.CreateBuilding(x, y, z, parent, roofColorOverride)
 	-- 레고 스타일 집 (다양성 추가)
 	local houseWidth = math.random(18, 24)
 	local houseDepth = math.random(16, 22)
 	local floorHeight = 8 -- 각 층 높이
 	local roofHeight = 6 -- 지붕 높이
 	
-	-- 층수 결정 (1층 또는 2층)
-	local floors = math.random(1, 2)
+	-- 층수 결정 (1층 고정)
+	local floors = 1 -- math.random(1, 2)
 	
 	-- 색상 팔레트 (너무 밝지 않게 조정)
 	local wallColors = {
@@ -434,8 +1187,14 @@ function MapGenerator.CreateBuilding(x, y, z, parent)
 		Color3.fromRGB(100, 60, 40), -- Brown
 	}
 	
-	local wallColor = wallColors[math.random(#wallColors)]
-	local roofColor = roofColors[math.random(#roofColors)]
+	local wallColor = wallColors[math.random(1, #wallColors)]
+	local roofColor = roofColorOverride or roofColors[math.random(1, #roofColors)]
+	
+	-- [Adjustment] If specific roof color is requested, make walls white to highlight it
+	if roofColorOverride then
+		wallColor = Color3.fromRGB(255, 255, 255)
+	end
+	
 	local windowColor = Color3.fromRGB(100, 150, 200) -- 파란 창문
 	local doorColor = Color3.fromRGB(80, 50, 30) -- 갈색 문
 	
@@ -444,8 +1203,9 @@ function MapGenerator.CreateBuilding(x, y, z, parent)
 	model.Parent = parent
 	
 	-- 1층 벽 (SmoothPlastic -> Plastic)
-	createPart("Floor1", Vector3.new(houseWidth, floorHeight, houseDepth), 
+	local floor1 = createPart("Floor1", Vector3.new(houseWidth, floorHeight, houseDepth), 
 		Vector3.new(x, y + floorHeight/2, z), wallColor, Enum.Material.Plastic, model)
+	model.PrimaryPart = floor1
 	
 	-- 2층 벽 (있을 경우)
 	if floors == 2 then
@@ -459,20 +1219,21 @@ function MapGenerator.CreateBuilding(x, y, z, parent)
 	-- 삼각 지붕 (Wedge 대신 두 개의 기울어진 파트로 표현)
 	local roofThick = 1.5
 	local roofOverhang = 2 -- 지붕이 벽 밖으로 튀어나오는 정도
+	local roofMat = Enum.Material.Plastic -- [Modified] Less vivid than SmoothPlastic
 	
 	-- 지붕 왼쪽 면
 	local roofLeft = createPart("RoofLeft", Vector3.new(houseWidth + roofOverhang*2, roofThick, houseDepth/2 + roofOverhang), 
-		Vector3.new(x, y + totalWallHeight + roofHeight/2, z - houseDepth/4), roofColor, Enum.Material.Plastic, model)
+		Vector3.new(x, y + totalWallHeight + roofHeight/2, z - houseDepth/4), roofColor, roofMat, model)
 	roofLeft.Orientation = Vector3.new(-30, 0, 0) -- 기울기
 	
 	-- 지붕 오른쪽 면
 	local roofRight = createPart("RoofRight", Vector3.new(houseWidth + roofOverhang*2, roofThick, houseDepth/2 + roofOverhang), 
-		Vector3.new(x, y + totalWallHeight + roofHeight/2, z + houseDepth/4), roofColor, Enum.Material.Plastic, model)
+		Vector3.new(x, y + totalWallHeight + roofHeight/2, z + houseDepth/4), roofColor, roofMat, model)
 	roofRight.Orientation = Vector3.new(30, 0, 0) -- 반대쪽 기울기
 	
 	-- 지붕 꼭대기 (마감 - 작은 틈 메우기)
 	createPart("RoofTop", Vector3.new(houseWidth + roofOverhang*2, roofThick, roofThick), 
-		Vector3.new(x, y + totalWallHeight + roofHeight, z), roofColor, Enum.Material.Plastic, model)
+		Vector3.new(x, y + totalWallHeight + roofHeight, z), roofColor, roofMat, model)
 	
 	-- 1층 창문들 (앞면) - 불 꺼진 창문
 	local windowSize = Vector3.new(3, 4, 0.5)
@@ -493,6 +1254,8 @@ function MapGenerator.CreateBuilding(x, y, z, parent)
 	local chimneySize = Vector3.new(2, 5, 2)
 	local chimneyX = (math.random() > 0.5) and (x + houseWidth/3) or (x - houseWidth/3) -- 왼쪽 또는 오른쪽
 	createPart("Chimney", chimneySize, Vector3.new(chimneyX, y + totalWallHeight + roofHeight + 1, z), Color3.fromRGB(100, 80, 70), Enum.Material.Brick, model)
+	
+	return model
 end
 
 function MapGenerator.CreateParkingLot(x, y, z, parent)
@@ -577,6 +1340,276 @@ function MapGenerator.CreateBridge(parent)
 	-- 동쪽 램프
 	local rampE = createPart("RampE", Vector3.new(rampLength, 2, bridgeWidth), Vector3.new(mapSize/2 - rampLength/2, bridgeHeight/2, 0), Color3.new(0.6, 0.6, 0.6), Enum.Material.Concrete, model)
 	rampE.Orientation = Vector3.new(0, 0, -math.deg(math.atan2(bridgeHeight, rampLength)))
+end
+
+-- 요리사 NPC 생성 (Busy Animation)
+function MapGenerator.SpawnChef(locationCF, parent)
+	local model = Instance.new("Model")
+	model.Name = "Chef"
+	model.Parent = parent
+	
+	-- Humanoid
+	local hum = Instance.new("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.Parent = model
+	
+	-- Colors
+	local skinColor = Color3.fromRGB(240, 200, 180)
+	local shirtColor = Color3.fromRGB(255, 255, 255) -- White
+	local apronColor = Color3.fromRGB(200, 50, 50) -- Red Apron
+	local pantsColor = Color3.fromRGB(50, 50, 50) -- Black Pants
+	
+	-- Helper
+	local function makePart(name, size, color, cf)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.Plastic
+		p.Anchored = true
+		p.CanCollide = false
+		p.CFrame = locationCF * cf
+		p.Parent = model
+		return p
+	end
+	
+	-- Body Parts (R6)
+	-- Pivot is Ground Level.
+	local torso = makePart("Torso", Vector3.new(2, 2, 1), shirtColor, CFrame.new(0, 3, 0))
+	local head = makePart("Head", Vector3.new(1, 1, 1), skinColor, CFrame.new(0, 4.5, 0))
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+	mesh.Parent = head
+	local face = Instance.new("Decal")
+	face.Texture = "rbxasset://textures/face.png"
+	face.Face = Enum.NormalId.Front
+	face.Parent = head
+	
+	-- Chef Hat (Tall Cylinder)
+	local hat = makePart("ChefHat", Vector3.new(1, 1.2, 1), Color3.new(1,1,1), CFrame.new(0, 5.2, 0))
+	-- Using Special Mesh for clean look
+	local hatMesh = Instance.new("SpecialMesh")
+	hatMesh.MeshType = Enum.MeshType.Head -- Use Head shape stretched for puffy look
+	hatMesh.Scale = Vector3.new(1.2, 2, 1.2)
+	hatMesh.Parent = hat
+	
+	-- Arms
+	local lArm = makePart("Left Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(-1.5, 3, 0))
+	local rArm = makePart("Right Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(1.5, 3, 0))
+	
+	-- Legs
+	makePart("Left Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(-0.5, 1, 0))
+	makePart("Right Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(0.5, 1, 0))
+	
+	-- Apron (Visual Part) (Attached to Torso logic)
+	makePart("Apron", Vector3.new(2.1, 2.5, 0.2), apronColor, CFrame.new(0, 2.5, -0.6))
+	
+	-- Tool (Spatula)
+	local spatula = makePart("Spatula", Vector3.new(0.2, 1.5, 0.4), Color3.new(0.5,0.5,0.5), CFrame.new(1.5, 2, -1.5) * CFrame.Angles(math.rad(45), 0, 0))
+	spatula.Parent = rArm -- Attach to arm conceptually
+
+	-- Animation Loop (Task)
+	task.spawn(function()
+		local t = 0
+		while model and model.Parent do
+			t = t + 0.1
+			task.wait(0.05)
+			
+			-- Animate Arms (Chopping / Stirring)
+			-- Right Arm (Stirring): Higher Y (3.8) to clear counter
+			local stirY = math.sin(t * 10) * 0.3
+			local stirZ = math.cos(t * 10) * 0.3
+			rArm.CFrame = locationCF * CFrame.new(1.5, 3.8 + stirY, -0.5 + stirZ) * CFrame.Angles(math.rad(80 + stirY*20), 0, 0)
+			
+			-- Spatula follows arm (Simple offset)
+			spatula.CFrame = rArm.CFrame * CFrame.new(0, -1, -0.5) * CFrame.Angles(math.rad(90), 0, 0)
+			
+			-- Left Arm (Holding Pot/Pan High)
+			lArm.CFrame = locationCF * CFrame.new(-1.5, 3.8, -0.5) * CFrame.Angles(math.rad(80), 0, math.rad(10))
+			
+			-- Head Bob
+			head.CFrame = locationCF * CFrame.new(0, 4.5 + math.abs(math.sin(t*5)*0.05), 0)
+			hat.CFrame = head.CFrame * CFrame.new(0, 1.2, 0) -- Update Hat relative to head? No, relative to world + offset
+			-- Wait, head moves. Hat should follow.
+			hat.CFrame = head.CFrame * CFrame.new(0, 0.7, 0)
+			
+			-- Torso Twist (Busy look)
+			local twist = math.sin(t * 2) * 0.1
+			torso.CFrame = locationCF * CFrame.new(0, 3, 0) * CFrame.Angles(0, twist, 0)
+			
+			-- Apron Follows Torso roughly
+			local apron = model:FindFirstChild("Apron")
+			if apron then
+				apron.CFrame = torso.CFrame * CFrame.new(0, -0.5, -0.6)
+			end
+		end
+	end)
+end
+
+-- 고양이 NPC 생성 (Wandering AI)
+function MapGenerator.SpawnCat(locationCF, parent)
+	local model = Instance.new("Model")
+	model.Name = "Cat"
+	model.Parent = parent
+	
+	-- Humanoid
+	local hum = Instance.new("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.Parent = model
+	
+	-- Colors
+	local colors = {
+		Color3.fromRGB(240, 240, 240), -- White
+		Color3.fromRGB(40, 40, 40),    -- Black
+		Color3.fromRGB(200, 150, 100), -- Orange
+		Color3.fromRGB(150, 150, 150), -- Grey
+	}
+	local catColor = colors[math.random(1, #colors)]
+	
+	-- Helper
+	local function makePart(name, size, color, cf)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.Plastic
+		p.Anchored = false -- NPC needs physics/humanoid logic? 
+		-- Wait, Humanoid MoveTo doesn't work well with Anchored parts. They must be Unanchored + Welded.
+		-- OR Anchored + Tweening.
+		-- Humanoid methods ONLY work on unanchored rigs with Motors/Welds.
+		-- For simplicity in a MapGenerator script (Server), creating a Full Rig with Motor6D is tedious.
+		-- ALTERNATIVE: Use Anchored Parts + CFrame Tweening in specific loop.
+		-- BUT "Wandering" usually implies walking animation.
+		-- If I use Anchored parts, I have to animate legs manually AND move body manually.
+		-- IF I use Unanchored, I need to rig it.
+		-- Let's try SIMPLE ANCHORED TWEEN (Slide + Leg Swing). It's more stable for environmental NPCs.
+		-- OR just create Unanchored blocks and weld them to Torso? That is "Rigging".
+		-- Let's do Unanchored + Weld for "Humanoid" support?
+		-- No, `makePart` returns Anchored=true. Let's force Unanchored and stick to Humanoid?
+		-- Actually, Rigging script is long.
+		-- Let's use simple Anchored + Tween AI. It acts like a "Roomba".
+		-- "Wandering" = Pick target, Tween position over time, Animate legs.
+		
+		p.Anchored = true
+		p.CanCollide = false -- Cat shouldn't trip players? Or CanCollide=true for body? True for Torso.
+		if name == "Torso" then p.CanCollide = true end
+		
+		p.CFrame = locationCF * cf
+		p.Parent = model
+		return p
+	end
+	
+	-- Model Creation (Anchored for manual CFraming)
+	-- Torso (Horizontal Block)
+	local torso = makePart("Torso", Vector3.new(1, 1, 2), catColor, CFrame.new(0, 1.5, 0))
+	model.PrimaryPart = torso
+	
+	-- Head
+	local head = makePart("Head", Vector3.new(0.8, 0.8, 0.8), catColor, CFrame.new(0, 2.2, -0.8))
+	-- Ears
+	makePart("EarL", Vector3.new(0.2, 0.4, 0.2), catColor, CFrame.new(-0.25, 2.7, -0.8))
+	makePart("EarR", Vector3.new(0.2, 0.4, 0.2), catColor, CFrame.new(0.25, 2.7, -0.8))
+	
+	-- Tail
+	local tail = makePart("Tail", Vector3.new(0.3, 0.3, 1.5), catColor, CFrame.new(0, 2.0, 1.2) * CFrame.Angles(math.rad(45), 0, 0))
+	
+	-- Legs
+	local legSize = Vector3.new(0.3, 1, 0.3)
+	local legFL = makePart("FL", legSize, catColor, CFrame.new(-0.35, 0.5, -0.8))
+	local legFR = makePart("FR", legSize, catColor, CFrame.new(0.35, 0.5, -0.8))
+	local legBL = makePart("BL", legSize, catColor, CFrame.new(-0.35, 0.5, 0.8))
+	local legBR = makePart("BR", legSize, catColor, CFrame.new(0.35, 0.5, 0.8))
+
+	-- AI Loop (Anchored Movement with Terrain Adherence)
+	task.spawn(function()
+		local speed = 8 -- studs/sec
+		local waitTime = math.random(2, 5)
+		local state = "Idle" -- Idle, Moving
+		local targetPos = nil
+		
+		-- Raycast Params
+		local rayParams = RaycastParams.new()
+		rayParams.FilterDescendantsInstances = {model}
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		
+		while model and model.Parent do
+			if state == "Idle" then
+				task.wait(waitTime)
+				-- Pick new target
+				local range = 30
+				local rx = math.random(-range, range)
+				local rz = math.random(-range, range)
+				
+				-- Raycast to find Ground Height at Target
+				local searchOrigin = torso.Position + Vector3.new(rx, 50, rz) -- Start high
+				local rayRes = workspace:Raycast(searchOrigin, Vector3.new(0, -100, 0), rayParams)
+				
+				if rayRes then
+					targetPos = rayRes.Position + Vector3.new(0, 1.5, 0) -- Target Ground + Height
+					state = "Moving"
+				else
+					-- No ground found? Skip
+					waitTime = 1
+				end
+				
+			elseif state == "Moving" and targetPos then
+				local currentPos = torso.Position
+				local dirVector = (targetPos - currentPos)
+				-- Flatten Direction for navigation (XZ plane)
+				local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
+				
+				if flatDir.Magnitude < 0.5 then
+					state = "Idle"
+					waitTime = math.random(3, 8)
+				else
+					-- Move Step
+					local dir = flatDir.Unit
+					local step = speed * 0.05 -- 0.05 sec tick
+					local nextXZ = currentPos + dir * step
+					
+					-- Raycast at Next Position to Stick to Ground
+					local rayRes = workspace:Raycast(nextXZ + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0), rayParams)
+					local nextY = currentPos.Y -- Default to current if fail
+					
+					if rayRes then
+						nextY = rayRes.Position.Y + 1.5
+					end
+					
+					local nextPos = Vector3.new(nextXZ.X, nextY, nextXZ.Z)
+					
+					-- Rotate to face target (Keep Upright)
+					local lookCF = CFrame.lookAt(currentPos, Vector3.new(targetPos.X, currentPos.Y, targetPos.Z))
+					
+					-- Apply Position & Rotation
+					torso.CFrame = CFrame.new(nextPos) * lookCF.Rotation
+					
+					-- Update Limbs (follow torso)
+					-- Simple Leg Animation: Sin wave
+					local t = tick() * 15
+					
+					head.CFrame = torso.CFrame * CFrame.new(0, 0.7, -0.8)
+					
+					-- Tail
+					tail.CFrame = torso.CFrame * CFrame.new(0, 0.5, 1.2) * CFrame.Angles(math.rad(45 + math.sin(t)*10), 0, 0)
+					
+					-- Leg Swing
+					legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t))*0.2, -0.8 + math.sin(t)*0.3)
+					legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t+3))*0.2, -0.8 + math.sin(t+3)*0.3)
+					legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t+3))*0.2, 0.8 + math.sin(t+3)*0.3)
+					legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t))*0.2, 0.8 + math.sin(t)*0.3)
+					
+					-- Keep Ears attached
+					local earL = model:FindFirstChild("EarL")
+					local earR = model:FindFirstChild("EarR")
+					if earL then earL.CFrame = head.CFrame * CFrame.new(-0.25, 0.5, 0) end
+					if earR then earR.CFrame = head.CFrame * CFrame.new(0.25, 0.5, 0) end
+					
+				end
+				task.wait(0.05)
+			end
+		end
+	end)
 end
 
 return MapGenerator

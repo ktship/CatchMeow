@@ -137,6 +137,24 @@ local function onCharacterAdded(char)
 			return 
 		end
 		
+		-- [Condition Check] Only Aim if holding "Camera" tool
+		local tool = char:FindFirstChildWhichIsA("Tool")
+		local isCameraEquipped = tool and (tool.Name:find("Camera") ~= nil)
+		
+		-- If not equipped, Reset to Original Pose and Hide Visuals
+		if not isCameraEquipped then
+			laserBeam.Parent = nil
+			targetDot.Parent = nil
+			warningLabel.Visible = false
+			
+			-- Reset Joints (Smoothly return to base pose)
+			if waist then waist.C0 = waist.C0:Lerp(waistC0, 0.1) end
+			if neck then neck.C0 = neck.C0:Lerp(neckC0, 0.1) end
+			if rSh then rSh.C0 = rSh.C0:Lerp(rShC0, 0.1) end
+			
+			return -- Skip Aim Logic
+		end
+		
 		local hitPos = mouse.Hit.Position
 		local isProne = char:GetAttribute("IsProne") == true
 		
@@ -145,28 +163,19 @@ local function onCharacterAdded(char)
 		targetDot.Parent = visualFolder
 		targetDot.Position = hitPos
 		
-		-- 1. 레이저 사이트 업데이트
-		laserBeam.Parent = visualFolder
-		targetDot.Parent = visualFolder
-		targetDot.Position = hitPos
-		
 		-- [수정] 레이저 시작점을 Head가 아닌 총구(Muzzle)로 변경
-		local startPos = headPart.Position -- 기본값 (무기 없으면 눈에서)
+		local startPos = headPart.Position 
 		
-		local tool = char:FindFirstChildWhichIsA("Tool")
-		if tool then
-			local handle = tool:FindFirstChild("Handle")
-			if handle then
-				local muzzle = handle:FindFirstChild("Muzzle")
-				if muzzle then
-					startPos = muzzle.WorldPosition
-				else
-					-- Muzzle이 없으면 핸들에서 약간 앞으로
-					startPos = (handle.CFrame * CFrame.new(0, 0, -1)).Position 
-				end
+		local handle = tool:FindFirstChild("Handle")
+		if handle then
+			local muzzle = handle:FindFirstChild("Muzzle")
+			if muzzle then
+				startPos = muzzle.WorldPosition
+			else
+				startPos = (handle.CFrame * CFrame.new(0, 0, -1)).Position 
 			end
 		end
-		
+
 		local distance = (hitPos - startPos).Magnitude
 		laserBeam.Size = Vector3.new(0.05, 0.05, distance)
 		laserBeam.CFrame = CFrame.new(startPos, hitPos) * CFrame.new(0, 0, -distance/2)

@@ -175,9 +175,9 @@ RunService.Heartbeat:Connect(function(dt)
 			for _, part in ipairs(parts) do
 				local model = part:FindFirstAncestorOfClass("Model")
 				if model then
-					if model.Name == "Cat" then
+					if model.Name == "Cat" or model.Name == "TrafficCar" then
 						isBlocked = true
-						-- print("Obstacle Detected: Cat")
+						-- print("Obstacle Detected: " .. model.Name)
 						break -- Stop checking if caught
 					elseif model:FindFirstChild("Humanoid") and model.Name ~= "TrafficCar" then
 						-- Also stop for players? (Optional, maybe nice)

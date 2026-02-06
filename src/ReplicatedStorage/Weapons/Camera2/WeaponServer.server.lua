@@ -7,7 +7,8 @@ local Debris = game:GetService("Debris")
 Remote.OnServerEvent:Connect(function(player, targetPosition)
 	-- 기본 검증
 	if not player.Character or not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then return end
-	if player.Character:FindFirstChild(Config.Camera.Name) ~= Tool then return end
+	-- Camera2 uses "Camera2" name now, so check for tool match directly
+	if player.Character:FindFirstChild("Camera2") ~= Tool then return end
 	
 	local handle = Tool:FindFirstChild("Handle")
 	if not handle then return end
@@ -43,11 +44,41 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 		
 		-- 무엇을 찍었는지 확인
 		local hitPart = rayResult.Instance
-		local humanoid = hitPart.Parent:FindFirstChild("Humanoid") or hitPart.Parent.Parent:FindFirstChild("Humanoid")
+		local rootModel = hitPart:FindFirstAncestorOfClass("Model")
 		
-		if humanoid then
-			-- 플레이어를 찍었을 때의 로직 (예: 이름 출력)
-			print(player.Name .. " captured " .. humanoid.Parent.Name)
+		if rootModel then
+			local objectName = rootModel.Name
+			local colorName = rootModel:GetAttribute("ColorName")
+			local isMatch = false
+			local target = player:GetAttribute("TargetCat")
+			
+			-- 1. Identify Object
+			if objectName == "TrafficCar" then
+				objectName = "Car"
+				local body = rootModel:FindFirstChild("Body")
+				if body then
+					colorName = body.BrickColor.Name
+				end
+			elseif objectName == "Cat" then
+				if colorName == target then
+					isMatch = true
+				end
+			end
+			
+			-- 2. Distance/Size Check
+			local dist = (rayResult.Position - origin).Magnitude
+			local maxDist = Config.Camera.VerificationDistance or 40
+			
+			if dist > maxDist then
+				isMatch = false
+				objectName = objectName .. " (Too Far/Small)"
+			end
+			
+			-- 3. Send Feedback (Log Mode)
+			local feedbackEvent = game.ReplicatedStorage.Events:FindFirstChild("PhotoFeedback")
+			if feedbackEvent then
+				feedbackEvent:FireClient(player, isMatch, target, objectName, colorName)
+			end
 		end
 	end
 end)

@@ -7,11 +7,9 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+
 -- 모듈 로드 대기
-local TeamManager
--- 순환 의존성 방지를 위해 단순 require 대신 지연 로딩 패턴 사용 가능하지만,
--- 여기서는 초기화 순서를 보장한다는 전제로 진행
--- 실제로는 GameManager가 이들을 조율하는 것이 좋음
 
 local function giveWeapon(player)
 	-- Give both Camera and Camera2
@@ -61,6 +59,13 @@ local function onCharacterAdded(player, character)
 	if humanoid then
 		humanoid.MaxHealth = 100
 		humanoid.Health = 100
+	end
+	
+	-- [Mission] Assign Target Cat Color
+	if Config.CatColors then
+		local mission = Config.CatColors[math.random(1, #Config.CatColors)].Name
+		player:SetAttribute("TargetCat", mission)
+		-- print("Mission Assigned: Find " .. mission .. " Cat!")
 	end
 	
 	-- 팀 색상 의류 적용 예시 (간단하게 상의 색상 변경)

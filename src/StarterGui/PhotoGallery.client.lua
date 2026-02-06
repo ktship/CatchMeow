@@ -352,6 +352,36 @@ local function createPhoto(data)
 		Text = "Check your Album.",
 		Duration = 2
 	})
+	
+	-- [Added] Click to Verify Log
+	-- Add Button covering the frame
+	local verifyBtn = Instance.new("TextButton")
+	verifyBtn.Name = "VerifyBtn"
+	verifyBtn.Size = UDim2.new(1, 0, 1, 0)
+	verifyBtn.BackgroundTransparency = 1
+	verifyBtn.Text = ""
+	verifyBtn.Parent = photoFrame
+	
+	verifyBtn.MouseButton1Click:Connect(function()
+		local isMatch = photoFrame:GetAttribute("IsMatch")
+		local target = photoFrame:GetAttribute("Target")
+		local obj = photoFrame:GetAttribute("Object")
+		local col = photoFrame:GetAttribute("Color")
+		
+		if target then
+			-- Verification Data Exists
+			local result = isMatch and "O (Success)" or "X (Fail)"
+			local capturedInfo = obj or "Unknown"
+			if col then capturedInfo = col .. " " .. capturedInfo end
+			
+			print("🔎 Verifying Photo...")
+			print("   Target: " .. tostring(target))
+			print("   Captured: " .. capturedInfo)
+			print("   Result: " .. result)
+		else
+			print("🔎 Scene Photo (No Verification Data)")
+		end
+	end)
 end
 
 -- Listen for Event
@@ -360,6 +390,39 @@ if events then
 	local takePhoto = events:WaitForChild("TakePhoto", 10)
 	if takePhoto then
 		takePhoto.Event:Connect(createPhoto)
-		-- print("[PhotoGallery] Listening for photos...")
+	end
+	
+	-- [Added] Listen for Verification Feedback and attach to latest photo
+	local photoFeedback = events:WaitForChild("PhotoFeedback", 10)
+	if photoFeedback then
+		photoFeedback.OnClientEvent:Connect(function(isMatch, target, objectName, colorName)
+			-- Find latest photo (Last child in scroller? Grid sorts by name? Frame names are default)
+			-- Usually newest is last added if Grid sorting is Default (LayoutOrder 0).
+			-- Check children count.
+			local frames = scroller:GetChildren()
+			local latestFrame = nil
+			-- Filter for Frames only (ignore layout/constraints)
+			local photoFrames = {}
+			for _, child in ipairs(frames) do
+				if child:IsA("Frame") then
+					table.insert(photoFrames, child)
+				end
+			end
+			
+			-- Sort by Age? We just created it, so it's likely the last one found or inserted.
+			-- Let's assume the most recent child is the one.
+			-- Ideally we'd map ID, but for now assumption works if latency is low.
+			if #photoFrames > 0 then
+				latestFrame = photoFrames[#photoFrames]
+			end
+			
+			if latestFrame then
+				latestFrame:SetAttribute("IsMatch", isMatch)
+				latestFrame:SetAttribute("Target", target)
+				latestFrame:SetAttribute("Object", objectName)
+				latestFrame:SetAttribute("Color", colorName)
+				-- print("Attached Verification Data to Photo")
+			end
+		end)
 	end
 end

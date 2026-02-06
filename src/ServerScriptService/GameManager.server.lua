@@ -42,6 +42,14 @@ if not takePhotoEvent then
 	takePhotoEvent.Parent = eventsFolder
 end
 
+-- PhotoFeedback RemoteEvent (Server-to-Client)
+local photoFeedbackEvent = eventsFolder:FindFirstChild("PhotoFeedback")
+if not photoFeedbackEvent then
+	photoFeedbackEvent = Instance.new("RemoteEvent")
+	photoFeedbackEvent.Name = "PhotoFeedback"
+	photoFeedbackEvent.Parent = eventsFolder
+end
+
 -- Helper 함수
 local function setStatus(msg)
 	statusValue.Value = msg

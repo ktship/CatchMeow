@@ -12,29 +12,7 @@ Tool.Equipped:Connect(function()
 	isEquipped = true
 	Mouse.Icon = "rbxasset://textures/Cursors/Crosshair.png"
 	
-	-- print("[WeaponClient] Equipped Tool:", Tool.Name)
-	
-	-- Camera 2 Feature: Flashlight & Zoom Viewfinder
-	if Tool.Name == "Camera2" then
-		-- Flashlight
-		local light = Handle:FindFirstChild("Flashlight")
-		if not light then
-			light = Instance.new("SpotLight")
-			light.Name = "Flashlight"
-			light.Brightness = 20
-			light.Range = 60
-			light.Angle = 45
-			light.Color = Color3.fromRGB(255, 255, 230)
-			light.Parent = Handle
-		end
-		light.Enabled = true
-	else
-		-- Determine if using Camera 1: Force remove any accidental light
-		local light = Handle:FindFirstChild("Flashlight")
-		if light then
-			light:Destroy()
-		end
-	end
+	-- Camera2: NO Flashlight (Removed per user request)
 end)
 
 Tool.Unequipped:Connect(function()

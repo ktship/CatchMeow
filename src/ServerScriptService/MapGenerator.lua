@@ -1,6 +1,7 @@
 -- MapGenerator.lua
 -- ServerScriptService에 위치해야 합니다.
 -- 게임 시작 시 도시 맵을 생성합니다.
+print("[MapGenerator] Loaded v1.5 (No Bungeoppang World Spawn)")
 
 local MapGenerator = {}
 
@@ -270,10 +271,10 @@ function MapGenerator.GenerateProcedural()
 						local subDist = math.abs(subCenterX - subRoadX)
 						
 						if subDist < roadWidth / 2 then
-							-- Generate Road ON TOP of the terrain (Raised to 1.0 to avoid flush with terrain)
-							createPart("RoadBlock", Vector3.new(roadBlockSize, 1, roadBlockSize), Vector3.new(subCenterX, 1.0, subCenterZ), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
+							-- Generate Road ON TOP of the terrain (Raised to 0.51 to touch ground at Y=0)
+							createPart("RoadBlock", Vector3.new(roadBlockSize, 1, roadBlockSize), Vector3.new(subCenterX, 0.51, subCenterZ), Color3.fromRGB(60, 60, 60), Enum.Material.Asphalt, roadFolder)
 							-- Optional: RoadBed
-							exportRoad(subCenterX, 1.0, subCenterZ)
+							exportRoad(subCenterX, 0.51, subCenterZ)
 						end
 						-- Removing the 'else' branch: No more tiny terrain blocks!
 					end
@@ -411,15 +412,31 @@ function MapGenerator.GenerateProcedural()
 	-- 경계
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 	
-	-- [Added] Wandering Cats (Spawn ~10 randomly)
-	for i = 1, 10 do
+	-- [Added] Wandering Cats (Increased to 110)
+	for i = 1, 110 do
 		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
-		-- Check Road? Cats can cross road. Just spawn on ground (Y=0 -> Cat Y=1)
-		local groundY = 0 
+		-- 지형 높이 계산하여 정확한 위치에 스폰
+		local groundY = getHeight(cx, cz) 
 		local catCF = CFrame.new(cx, groundY + 1, cz)
 		MapGenerator.SpawnCat(catCF, mapFolder)
 	end
+	
+	-- [Added] World Items (Disabled temporarily)
+	--[[
+	local itemsFolder = Instance.new("Folder")
+	itemsFolder.Name = "WorldItems"
+	itemsFolder.Parent = mapFolder
+	
+	for i = 1, 20 do
+		local iz = math.random(-mapSize/2 + 30, mapSize/2 - 30)
+		local roadX = roadAmplitude * math.sin(iz * roadFrequency)
+		local offsetX = (math.random() > 0.5) and (roadWidth/2 + 5) or -(roadWidth/2 + 5)
+		local ix = roadX + offsetX
+		
+		MapGenerator.SpawnWorldItem("Stick", Vector3.new(ix, 2, iz), itemsFolder)
+	end
+	]]
 	
 	-- [CACHE & EXPORT]
 	MapGenerator.CurrentData = mapExportData
@@ -543,8 +560,10 @@ function MapGenerator.LoadMapFromData(mapData)
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 	MapGenerator.CreateTunnels(mapFolder, mapSize) -- [Added] Regenerate Tunnels
 	
-	-- [Added] Wandering Cats (Spawn ~10 randomly)
-	for i = 1, 10 do
+	-- [Added] Wandering Cats (Increased to 110)
+	for i = 1, 110 do
+		-- Note: getHeight is not available here, but LoadMapFromData usually assumes flat near road or uses saved height.
+		-- For simplicity, keeping it at 100 -> 110.
 		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local catCF = CFrame.new(cx, 1, cz)
@@ -697,9 +716,9 @@ function MapGenerator.CreateStreetStall(x, y, z, parent)
 	addPart("PoleBL", Vector3.new(0.2, poleH, 0.2), Vector3.new(x - counterW/2 + poleOffset, poleY, z + counterD/2 - poleOffset), metalColor, Enum.Material.Metal, model)
 	addPart("PoleBR", Vector3.new(0.2, poleH, 0.2), Vector3.new(x + counterW/2 - poleOffset, poleY, z + counterD/2 - poleOffset), metalColor, Enum.Material.Metal, model)
 	
-	-- 3. Tent Roof (Sloped or Flat with fringe)
-	-- Main Roof
-	addPart("Roof", Vector3.new(counterW + 1, 0.5, counterD + 1), Vector3.new(x, y + poleH, z), tentColor, Enum.Material.Fabric, model)
+	-- 3. Roof (Canvas)
+	local roof = addPart("Roof", Vector3.new(counterW + 1, 0.5, counterD + 1), Vector3.new(x, poleY + poleH/2 + 0.25, z), tentColor, Enum.Material.Fabric, model)
+	
 	-- Stripes (Optional visual detail: White blocks?)
 	addPart("Stripe", Vector3.new(counterW + 1.2, 0.6, 1), Vector3.new(x, y + poleH, z), Color3.fromRGB(240, 240, 240), Enum.Material.Fabric, model)
 	
@@ -1447,6 +1466,165 @@ function MapGenerator.SpawnChef(locationCF, parent)
 	end)
 end
 
+-- 월드 아이템 생성 (픽업 가능)
+function MapGenerator.SpawnWorldItem(itemId, position, parent)
+	local ItemData = require(game.ReplicatedStorage:WaitForChild("ItemData"))
+	local itemDef = ItemData.GetItem(itemId)
+	if not itemDef then return end
+	
+	-- 지면 높이 찾기 (레이캐스트)
+	-- [DEBUG] Road Check
+	local roadAmp = 50 -- Config.Map.Road.Amplitude
+	local roadFreq = 0.02 -- Frequency
+	local roadW = 22 -- Width
+	local calcRoadX = roadAmp * math.sin(position.Z * roadFreq)
+	local dist = math.abs(position.X - calcRoadX)
+	print(string.format("[MapGen] Item '%s' at (%.1f, %.1f). RoadX: %.1f. Dist: %.1f (Limit: %.1f)", itemId, position.X, position.Z, calcRoadX, dist, roadW/2))
+	
+	if dist < roadW/2 + 2 then
+		print("⚠️ WARNING: Item is ON THE ROAD!")
+	else
+		print("✅ Item is OFF ROAD.")
+	end
+
+	local rayResult = workspace:Raycast(position + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0))
+	local groundY = position.Y
+	if rayResult then
+		groundY = rayResult.Position.Y + 0.5 -- 적당히 띄움 (테이블 위에 놓을 수 있게 충돌체 고려)
+		-- print("Spawned Item " .. itemId .. " at Ground Y: " .. groundY)
+	else
+		-- print("Failed raycast for " .. itemId .. ", using default Y: " .. groundY)
+	end
+	
+	local part -- Declare part here, will be assigned in conditionals
+	-- 아이템별 외형 설정
+	if itemId == "Stick" then
+		part = Instance.new("Part")
+		part.Name = "WorldItem_" .. itemId
+		part.Size = Vector3.new(0.2, 0.2, 1.5)
+		part.Color = Color3.fromRGB(90, 60, 30)
+		part.Material = Enum.Material.Wood
+		part.CFrame = CFrame.new(position.X, groundY + 0.1, position.Z) * CFrame.Angles(0, math.random() * math.pi, math.rad(10))
+		part.Anchored = true
+		part.CanCollide = false
+		part.Parent = parent
+	elseif itemId == "Bungeoppang" then
+		-- 붕어빵 (From Assets)
+		local assets = game:GetService("ReplicatedStorage"):WaitForChild("Assets", 5)
+		local sourceItem = assets and assets:FindFirstChild("Bungeoppang")
+		
+		if sourceItem then
+			local model = sourceItem:Clone()
+			model.Name = "WorldItem_" .. itemId
+			
+			-- 위치 설정 (Model vs Part)
+			if model:IsA("Model") then
+				model:PivotTo(CFrame.new(position.X, groundY + 0.5, position.Z) * CFrame.Angles(math.rad(-90), math.random() * math.pi, 0))
+				
+				-- 앵커 설정 (월드 아이템은 고정)
+				for _, d in ipairs(model:GetDescendants()) do
+					if d:IsA("BasePart") then
+						d.Anchored = true
+						d.CanCollide = false
+					end
+				end
+				part = model.PrimaryPart or model:GetChildren()[1] -- ClickDetector용
+			elseif model:IsA("Accessory") then
+				-- Accessory 처리
+				local handle = model:FindFirstChild("Handle")
+				if handle then
+					-- 크기 확대 (2.5배) - 월드는 2.5배 유지
+					local scale = 2.5
+					handle.Size = handle.Size * scale
+					local mesh = handle:FindFirstChildOfClass("SpecialMesh")
+					if mesh then
+						mesh.Scale = mesh.Scale * scale
+					end
+					
+					-- 눕히기: 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
+					local targetRotation = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
+					local heightOffset = -0.4 -- -0.35에서 약간 더 내려서 공중에 뜨는 느낌 해결
+					
+					handle.CFrame = CFrame.new(position.X, groundY + heightOffset, position.Z) * targetRotation
+					
+					print(string.format("[MapGenerator] Bungeoppang Placed at (%.2f, %.2f, %.2f)", handle.Position.X, handle.Position.Y, handle.Position.Z))
+					print(string.format("[MapGenerator] Rotation (Deg): %.2f, %.2f, %.2f", handle.Orientation.X, handle.Orientation.Y, handle.Orientation.Z))
+
+					handle.Anchored = true
+					handle.CanCollide = false
+					part = handle -- ClickDetector 부착 대상
+				else
+					-- Handle이 없으면 빈 파트라도...
+					part = Instance.new("Part")
+					part.Parent = model
+				end
+			else
+				-- Single Part
+				model.Position = Vector3.new(position.X, groundY + 0.5, position.Z)
+				model.Anchored = true
+				model.CanCollide = false
+				part = model
+			end
+			model.Parent = parent
+		else
+			-- Fallback (Simple Part) if Asset not ready
+			part = Instance.new("Part")
+			part.Name = "WorldItem_" .. itemId
+			part.Size = Vector3.new(1.5, 1.5, 1.5)
+			part.Color = Color3.fromRGB(255, 170, 80)
+			part.Position = Vector3.new(position.X, groundY + 0.5, position.Z)
+			part.Anchored = true
+			part.Parent = parent
+		end
+	else
+
+		part = Instance.new("Part")
+		part.Name = "WorldItem_" .. itemId
+		part.Size = Vector3.new(1, 1, 1)
+		part.Color = Color3.fromRGB(200, 200, 200)
+		part.Position = Vector3.new(position.X, groundY + 0.5, position.Z)
+		part.Anchored = true
+		part.Parent = parent
+	end
+	
+	-- 아이템 ID 저장
+	part:SetAttribute("ItemId", itemId)
+	
+	-- ClickDetector 추가 (마우스 호버 + 클릭으로 획득)
+	-- ClickDetector는 기본적으로 손 모양 커서를 표시함
+	local clickDetector = Instance.new("ClickDetector")
+	clickDetector.MaxActivationDistance = 10 -- 10 stud 이내에서만 클릭 가능
+	clickDetector.Parent = part
+	
+	-- 외곽선 글로우 효과 (Highlight 사용)
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "ItemHighlight"
+	highlight.FillTransparency = 1 -- 내부 채우기 없음
+	highlight.OutlineTransparency = 0 -- 외곽선 완전 표시
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 100) -- 밝은 노란색
+	highlight.Adornee = part
+	highlight.Enabled = false
+	highlight.Parent = part
+	
+	-- 호버 이벤트 (외곽선 활성화)
+	clickDetector.MouseHoverEnter:Connect(function()
+		highlight.Enabled = true
+	end)
+	clickDetector.MouseHoverLeave:Connect(function()
+		highlight.Enabled = false
+	end)
+	
+	-- 클릭 이벤트 (InventoryManager에서 처리)
+	task.defer(function()
+		if _G.InventoryManager then
+			_G.InventoryManager.SetupWorldItem(part, itemId, clickDetector)
+		end
+	end)
+	
+	return part
+end
+
+
 -- 고양이 NPC 생성 (Wandering AI)
 function MapGenerator.SpawnCat(locationCF, parent)
 	local model = Instance.new("Model")
@@ -1458,156 +1636,322 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = model
 	
-	-- Colors
+	-- [Variety Logic] - Colors & Patterns
 	local colors = {
-		Color3.fromRGB(240, 240, 240), -- White
-		Color3.fromRGB(40, 40, 40),    -- Black
-		Color3.fromRGB(200, 150, 100), -- Orange
-		Color3.fromRGB(150, 150, 150), -- Grey
+		White = Color3.fromRGB(245, 245, 245),
+		Black = Color3.fromRGB(30, 30, 30),
+		Orange = Color3.fromRGB(220, 140, 60),
+		Grey = Color3.fromRGB(120, 120, 120),
+		Cream = Color3.fromRGB(240, 230, 200),
+		Brown = Color3.fromRGB(100, 70, 50),
+		DarkGrey = Color3.fromRGB(60, 60, 60),
 	}
-	local catColor = colors[math.random(1, #colors)]
+	
+	local eyeColors = {
+		Color3.fromRGB(0, 220, 255), -- Cyan
+		Color3.fromRGB(100, 255, 100), -- Green
+		Color3.fromRGB(255, 220, 0), -- Yellow
+		Color3.fromRGB(255, 150, 0), -- Amber
+	}
+	
+	local patternTypes = {"Solid", "Tuxedo", "Spotted", "Calico", "Pointed", "Tabby"}
+	local selectedPattern = patternTypes[math.random(1, #patternTypes)]
+	
+	-- Base Setup
+	local baseColor = colors.White
+	local accentColor = colors.White
+	local eyeColor = eyeColors[math.random(1, #eyeColors)]
+	
+	if selectedPattern == "Solid" then
+		local keys = {"White", "Black", "Orange", "Grey", "Cream", "Brown"}
+		baseColor = colors[keys[math.random(1, #keys)]]
+		accentColor = baseColor
+	elseif selectedPattern == "Tuxedo" then
+		baseColor = (math.random() > 0.5) and colors.Black or colors.Grey
+		accentColor = colors.White
+	elseif selectedPattern == "Spotted" then
+		baseColor = colors.White
+		local keys = {"Black", "Orange", "Grey", "Brown"}
+		accentColor = colors[keys[math.random(1, #keys)]]
+	elseif selectedPattern == "Calico" then
+		baseColor = colors.White
+	elseif selectedPattern == "Pointed" then
+		baseColor = colors.Cream
+		accentColor = colors.Brown
+	elseif selectedPattern == "Tabby" then
+		baseColor = (math.random() > 0.5) and colors.Orange or colors.Grey
+		accentColor = (baseColor == colors.Orange) and colors.Brown or colors.DarkGrey
+	end
+	
+	-- Set Attribute for Mission
+	model:SetAttribute("Pattern", selectedPattern)
 	
 	-- Helper
-	local function makePart(name, size, color, cf)
+	local function makePart(name, size, color, cf, parentPart)
 		local p = Instance.new("Part")
 		p.Name = name
 		p.Size = size
 		p.Color = color
 		p.Material = Enum.Material.Plastic
-		p.Anchored = false -- NPC needs physics/humanoid logic? 
-		-- Wait, Humanoid MoveTo doesn't work well with Anchored parts. They must be Unanchored + Welded.
-		-- OR Anchored + Tweening.
-		-- Humanoid methods ONLY work on unanchored rigs with Motors/Welds.
-		-- For simplicity in a MapGenerator script (Server), creating a Full Rig with Motor6D is tedious.
-		-- ALTERNATIVE: Use Anchored Parts + CFrame Tweening in specific loop.
-		-- BUT "Wandering" usually implies walking animation.
-		-- If I use Anchored parts, I have to animate legs manually AND move body manually.
-		-- IF I use Unanchored, I need to rig it.
-		-- Let's try SIMPLE ANCHORED TWEEN (Slide + Leg Swing). It's more stable for environmental NPCs.
-		-- OR just create Unanchored blocks and weld them to Torso? That is "Rigging".
-		-- Let's do Unanchored + Weld for "Humanoid" support?
-		-- No, `makePart` returns Anchored=true. Let's force Unanchored and stick to Humanoid?
-		-- Actually, Rigging script is long.
-		-- Let's use simple Anchored + Tween AI. It acts like a "Roomba".
-		-- "Wandering" = Pick target, Tween position over time, Animate legs.
-		
-		p.Anchored = true
-		p.CanCollide = false -- Cat shouldn't trip players? Or CanCollide=true for body? True for Torso.
-		if name == "Torso" then p.CanCollide = true end
-		
+		p.CanCollide = (name == "Torso")
 		p.CFrame = locationCF * cf
 		p.Parent = model
+		
+		if parentPart then
+			p.Anchored = false
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = parentPart
+			weld.Part1 = p
+			weld.Parent = p
+		else
+			p.Anchored = true
+		end
+		
 		return p
 	end
 	
-	-- Model Creation (Anchored for manual CFraming)
-	-- Torso (Horizontal Block)
-	local torso = makePart("Torso", Vector3.new(1, 1, 2), catColor, CFrame.new(0, 1.5, 0))
+	-- Model Creation
+	local torso = makePart("Torso", Vector3.new(1, 1, 2), baseColor, CFrame.new(0, 1.5, 0))
 	model.PrimaryPart = torso
+
+	-- Spots for Spotted/Calico
+	if selectedPattern == "Spotted" or selectedPattern == "Calico" then
+		for i = 1, math.random(2, 4) do
+			local spotColor = accentColor
+			if selectedPattern == "Calico" then
+				spotColor = (math.random() > 0.5) and colors.Orange or colors.Black
+			end
+			local spotSize = Vector3.new(math.random(4, 7)/10, 0.05, math.random(5, 8)/10)
+			-- Z-fighting 방지를 위해 몸통 표면에서 0.02 stud 띄우고, 각 얼룩마다 미세하게 높이를 다르게 설정 (i * 0.001)
+			local surfaceOffset = 0.52 + (i * 0.001)
+			local spotOffsetRel = CFrame.new((math.random()>0.5 and surfaceOffset or -surfaceOffset), math.random(-4, 4)/10, math.random(-8, 8)/10) * CFrame.Angles(0, 0, math.rad(90))
+			makePart("Spot"..i, spotSize, spotColor, CFrame.new(0, 1.5, 0) * spotOffsetRel, torso)
+		end
+	elseif selectedPattern == "Tuxedo" then
+		-- 가슴 패치도 Z-fighting 방지를 위해 조금 더 띄움 (-1.01 -> -1.02)
+		makePart("ChestPatch", Vector3.new(0.6, 0.8, 0.05), colors.White, CFrame.new(0, 1.5, -1.02), torso)
+	end
 	
 	-- Head
-	local head = makePart("Head", Vector3.new(0.8, 0.8, 0.8), catColor, CFrame.new(0, 2.2, -0.8))
+	local headColor = (selectedPattern == "Pointed") and accentColor or baseColor
+	local head = makePart("Head", Vector3.new(0.8, 0.8, 0.8), headColor, CFrame.new(0, 2.2, -0.8))
+	-- Move eyes and ears relative to head initial CFrame for the helper
+	makePart("EyeL", Vector3.new(0.15, 0.15, 0.05), eyeColor, CFrame.new(-0.2, 2.3, -1.21), head)
+	makePart("EyeR", Vector3.new(0.15, 0.15, 0.05), eyeColor, CFrame.new(0.2, 2.3, -1.21), head)
+	
 	-- Ears
-	makePart("EarL", Vector3.new(0.2, 0.4, 0.2), catColor, CFrame.new(-0.25, 2.7, -0.8))
-	makePart("EarR", Vector3.new(0.2, 0.4, 0.2), catColor, CFrame.new(0.25, 2.7, -0.8))
+	makePart("EarL", Vector3.new(0.2, 0.4, 0.2), headColor, CFrame.new(-0.25, 2.7, -0.8), head)
+	makePart("EarR", Vector3.new(0.2, 0.4, 0.2), headColor, CFrame.new(0.25, 2.7, -0.8), head)
 	
 	-- Tail
-	local tail = makePart("Tail", Vector3.new(0.3, 0.3, 1.5), catColor, CFrame.new(0, 2.0, 1.2) * CFrame.Angles(math.rad(45), 0, 0))
+	local tailLength = 1.2
+	local tailColor = (selectedPattern == "Pointed") and accentColor or baseColor
+	local tail = makePart("Tail", Vector3.new(0.2, 0.2, tailLength), tailColor, CFrame.new(0, 2.0, 1.0) * CFrame.Angles(math.rad(45), 0, 0))
 	
 	-- Legs
 	local legSize = Vector3.new(0.3, 1, 0.3)
-	local legFL = makePart("FL", legSize, catColor, CFrame.new(-0.35, 0.5, -0.8))
-	local legFR = makePart("FR", legSize, catColor, CFrame.new(0.35, 0.5, -0.8))
-	local legBL = makePart("BL", legSize, catColor, CFrame.new(-0.35, 0.5, 0.8))
-	local legBR = makePart("BR", legSize, catColor, CFrame.new(0.35, 0.5, 0.8))
+	local useSocks = (selectedPattern == "Tuxedo") or (math.random() > 0.7)
+	
+	local function makeLeg(name, cf)
+		local l = makePart(name, legSize, baseColor, cf)
+		if useSocks then
+			makePart(name.."Sock", Vector3.new(0.32, 0.2, 0.32), colors.White, cf * CFrame.new(0, -0.4, 0), l)
+		end
+		return l
+	end
+	
+	local legFL = makeLeg("FL", CFrame.new(-0.35, 0.5, -0.8))
+	local legFR = makeLeg("FR", CFrame.new(0.35, 0.5, -0.8))
+	local legBL = makeLeg("BL", CFrame.new(-0.35, 0.5, 0.8))
+	local legBR = makeLeg("BR", CFrame.new(0.35, 0.5, 0.8))
 
-	-- AI Loop (Anchored Movement with Terrain Adherence)
+	-- AI Loop (Non-blocking Physics + State Machine)
 	task.spawn(function()
 		local speed = 8 -- studs/sec
-		local waitTime = math.random(2, 5)
 		local state = "Idle" -- Idle, Moving
 		local targetPos = nil
+		
+		-- Idle Timer
+		local idleTimer = 0
+		local idleDuration = math.random(2, 5)
 		
 		-- Raycast Params
 		local rayParams = RaycastParams.new()
 		rayParams.FilterDescendantsInstances = {model}
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
 		
+		local TICK_RATE = 0.05
+		
 		while model and model.Parent do
+			local currentPos = torso.Position
+			local nextXZ = currentPos -- Default horizontal position
+			
+			-- 1. State Logic
 			if state == "Idle" then
-				task.wait(waitTime)
-				-- Pick new target
-				local range = 30
-				local rx = math.random(-range, range)
-				local rz = math.random(-range, range)
+				idleTimer += TICK_RATE
 				
-				-- Raycast to find Ground Height at Target
-				local searchOrigin = torso.Position + Vector3.new(rx, 50, rz) -- Start high
-				local rayRes = workspace:Raycast(searchOrigin, Vector3.new(0, -100, 0), rayParams)
-				
-				if rayRes then
-					targetPos = rayRes.Position + Vector3.new(0, 1.5, 0) -- Target Ground + Height
-					state = "Moving"
-				else
-					-- No ground found? Skip
-					waitTime = 1
+				if idleTimer >= idleDuration then
+					-- Switch to Moving
+					local range = 30
+					local rx = math.random(-range, range)
+					local rz = math.random(-range, range)
+					
+					-- Find Target
+					local searchOrigin = currentPos + Vector3.new(rx, 50, rz)
+					local rayRes = workspace:Raycast(searchOrigin, Vector3.new(0, -100, 0), rayParams)
+					
+					if rayRes then
+						targetPos = rayRes.Position + Vector3.new(0, 1.5, 0)
+						state = "Moving"
+					else
+						-- Retry Idle
+						idleTimer = 0
+						idleDuration = 1
+					end
 				end
 				
 			elseif state == "Moving" and targetPos then
-				local currentPos = torso.Position
 				local dirVector = (targetPos - currentPos)
-				-- Flatten Direction for navigation (XZ plane)
 				local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
 				
 				if flatDir.Magnitude < 0.5 then
+					-- Reached Goal
 					state = "Idle"
-					waitTime = math.random(3, 8)
+					idleTimer = 0
+					idleDuration = math.random(3, 8)
 				else
 					-- Move Step
 					local dir = flatDir.Unit
-					local step = speed * 0.05 -- 0.05 sec tick
-					local nextXZ = currentPos + dir * step
+					local step = speed * TICK_RATE
+					nextXZ = currentPos + dir * step
 					
-					-- Raycast at Next Position to Stick to Ground
-					local rayRes = workspace:Raycast(nextXZ + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0), rayParams)
-					local nextY = currentPos.Y -- Default to current if fail
-					
-					if rayRes then
-						nextY = rayRes.Position.Y + 1.5
-					end
-					
-					local nextPos = Vector3.new(nextXZ.X, nextY, nextXZ.Z)
-					
-					-- Rotate to face target (Keep Upright)
+					-- Rotation (Only when moving)
 					local lookCF = CFrame.lookAt(currentPos, Vector3.new(targetPos.X, currentPos.Y, targetPos.Z))
-					
-					-- Apply Position & Rotation
-					torso.CFrame = CFrame.new(nextPos) * lookCF.Rotation
-					
-					-- Update Limbs (follow torso)
-					-- Simple Leg Animation: Sin wave
-					local t = tick() * 15
-					
-					head.CFrame = torso.CFrame * CFrame.new(0, 0.7, -0.8)
-					
-					-- Tail
-					tail.CFrame = torso.CFrame * CFrame.new(0, 0.5, 1.2) * CFrame.Angles(math.rad(45 + math.sin(t)*10), 0, 0)
-					
-					-- Leg Swing
-					legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t))*0.2, -0.8 + math.sin(t)*0.3)
-					legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t+3))*0.2, -0.8 + math.sin(t+3)*0.3)
-					legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t+3))*0.2, 0.8 + math.sin(t+3)*0.3)
-					legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t))*0.2, 0.8 + math.sin(t)*0.3)
-					
-					-- Keep Ears attached
-					local earL = model:FindFirstChild("EarL")
-					local earR = model:FindFirstChild("EarR")
-					if earL then earL.CFrame = head.CFrame * CFrame.new(-0.25, 0.5, 0) end
-					if earR then earR.CFrame = head.CFrame * CFrame.new(0.25, 0.5, 0) end
-					
+					torso.CFrame = CFrame.new(torso.Position) * lookCF.Rotation
 				end
-				task.wait(0.05)
 			end
+			
+			-- 2. PHYSICS (Always Run)
+			-- Calculates Y for nextXZ (which is currentPos if Idle)
+			
+			-- Prepare Physics Vars
+			if not model:GetAttribute("VerticalVelocity") then
+				model:SetAttribute("VerticalVelocity", 0)
+				model:SetAttribute("IsJumping", false)
+			end
+			
+			local vVel = model:GetAttribute("VerticalVelocity") or 0
+			local isJumping = model:GetAttribute("IsJumping") == true
+			local gravity = 80
+			local jumpPower = 35
+			local groundThreshold = 2.5
+			local maxJumpHeight = 3 -- 최대 점프 가능 높이 (차나 지붕 점프 불가)
+			
+			-- Check Ground at Next XZ
+			local groundHeight = -100
+			local rayRes = workspace:Raycast(nextXZ + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0), rayParams)
+			
+			if rayRes then
+				groundHeight = rayRes.Position.Y + 1.5
+			else
+				-- If no ground found (void), maybe keep old Height? Or fall?
+				-- Let's try to maintain last valid Y or fall slowly?
+				-- For safety, use current Y if void
+				groundHeight = currentPos.Y - 1 -- Simulate dropping?
+			end
+			
+			local finalY = currentPos.Y
+			
+			if not isJumping then
+				-- JUMP START CHECK
+				local heightDiff = groundHeight - currentPos.Y
+				
+				-- 점프 불가능한 높이 체크 (차, 건물 등)
+				if heightDiff > maxJumpHeight then
+					-- 너무 높음 - 이동 취소, 제자리 유지
+					nextXZ = currentPos -- 이동 취소
+					finalY = currentPos.Y
+					-- 새 목적지 찾기
+					state = "Idle"
+					idleTimer = 0
+					idleDuration = 0.5 -- 빠르게 새 방향 찾기
+				elseif heightDiff > groundThreshold and heightDiff <= maxJumpHeight then
+					-- 점프 가능한 높이
+					isJumping = true
+					vVel = jumpPower
+				else
+					-- GROUND STICK / FALL CHECK
+					local diff = groundHeight - currentPos.Y
+					
+					if diff < -2 then
+						-- Falling (Ground dropped below)
+						isJumping = true -- Treat as freefall
+					else
+						-- Stick to Ground (Smooth Lerp)
+						-- 단, 올라가는 경우 maxJumpHeight 제한 적용
+						if diff > 0 and diff > maxJumpHeight then
+							-- 너무 높음 - 이동 취소
+							nextXZ = currentPos
+							finalY = currentPos.Y
+						else
+							finalY = currentPos.Y + (diff * 0.3)
+							if math.abs(finalY - groundHeight) < 0.2 then
+								finalY = groundHeight
+							end
+						end
+					end
+				end
+			end
+			
+			if isJumping then
+				-- Apply Gravity
+				vVel = vVel - (gravity * TICK_RATE)
+				finalY = currentPos.Y + (vVel * TICK_RATE)
+				
+				-- LANDING CHECK
+				if vVel < 0 and finalY <= groundHeight then
+					isJumping = false
+					vVel = 0
+					finalY = groundHeight
+				end
+			end
+			
+			-- Save Physics State
+			model:SetAttribute("VerticalVelocity", vVel)
+			model:SetAttribute("IsJumping", isJumping)
+			
+			-- Apply CFrame
+			-- We reuse the Rotation from state logic (or keep existing if idle)
+			local currentRot = torso.CFrame.Rotation
+			torso.CFrame = CFrame.new(nextXZ.X, finalY, nextXZ.Z) * currentRot -- Preserve rotation
+			
+			-- 3. Animation (Visuals)
+			-- Reuse t logic
+			local t = tick() * 15
+			local isMoving = (state == "Moving")
+			
+			-- Head
+			head.CFrame = torso.CFrame * CFrame.new(0, 0.7, -0.8)
+			
+			-- 꼬리 애니메이션
+			local tailAngle = 45 + math.sin(t)*15
+			local tailOffset = Vector3.new(0, 0.5, 1.0)
+			local tailLength = 1.2
+			tail.CFrame = torso.CFrame * CFrame.new(tailOffset) * CFrame.Angles(math.rad(tailAngle), 0, 0) * CFrame.new(0, 0, tailLength/2)
+			
+			if isMoving then
+				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t))*0.2, -0.8 + math.sin(t)*0.3)
+				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t+3))*0.2, -0.8 + math.sin(t+3)*0.3)
+				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t+3))*0.2, 0.8 + math.sin(t+3)*0.3)
+				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t))*0.2, 0.8 + math.sin(t)*0.3)
+			else
+				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, -0.8)
+				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1, -0.8)
+				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, 0.8)
+				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1, 0.8)
+			end
+			
+			task.wait(TICK_RATE)
 		end
 	end)
 end

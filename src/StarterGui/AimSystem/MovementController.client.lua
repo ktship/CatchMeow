@@ -13,6 +13,7 @@ local PRONE_KEY = "ProneAction"
 local NORMAL_SPEED = 16
 local PRONE_SPEED = 4 -- 8에서 4로 감속 (느리게 기어가듯)
 local PRONE_JUMP = 0
+local NORMAL_JUMP = 50 -- 기본 점프력
 
 local isProne = false
 

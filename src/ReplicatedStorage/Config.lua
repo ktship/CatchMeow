@@ -34,11 +34,20 @@ Config.Map = {
 	}
 }
 
+-- 고양이 색상 정의
+Config.CatColors = {
+	{Name = "White", Color = Color3.fromRGB(240, 240, 240)},
+	{Name = "Black", Color = Color3.fromRGB(40, 40, 40)},
+	{Name = "Orange", Color = Color3.fromRGB(200, 150, 100)},
+	{Name = "Grey", Color = Color3.fromRGB(150, 150, 150)},
+}
+
 -- 카메라 설정
 Config.Camera = {
 	Name = "Camera",
 	ShutterSpeed = 0.5, -- 촬영 간격 (초)
 	Range = 100, -- 초점 거리
+	VerificationDistance = 40, -- 인식 가능한 최대 거리 (이보다 멀면 작게 나와서 인식 불가)
 }
 
 -- 게임 라운드 설정

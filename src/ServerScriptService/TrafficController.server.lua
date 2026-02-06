@@ -266,6 +266,14 @@ RunService.Heartbeat:Connect(function(dt)
 							local stunModel
 							
 							if head then
+								-- [Added] Face Texture Change Logic
+								local face = head:FindFirstChild("face")
+								local originalFace = nil
+								if face and face:IsA("Decal") then
+									originalFace = face.Texture
+									face.Texture = "rbxassetid://7546257482" -- [User Provided] Dizzy Face
+								end
+								
 								stunModel = Instance.new("Model")
 								stunModel.Name = "StunEffect"
 								
@@ -299,9 +307,9 @@ RunService.Heartbeat:Connect(function(dt)
 								hinge.MotorMaxTorque = math.huge
 								hinge.Parent = spinner
 								
-								-- 3. Stars (3 count)
+								-- 3. Stars (3 count) - [Reverted to 2D]
 								local starCount = 3
-								local radius = 2.5
+								local radius = 1.25 -- [Modified] Radius reduced by half (2.5 -> 1.25)
 								
 								for i = 1, starCount do
 									local angle = math.rad((360 / starCount) * i)
@@ -314,46 +322,46 @@ RunService.Heartbeat:Connect(function(dt)
 									
 									local billboard = Instance.new("BillboardGui")
 									billboard.Name = "Star"
-									-- Size Halved (2 -> 1 Stud)
 									billboard.Size = UDim2.new(1, 0, 1, 0) 
 									billboard.Adornee = starAtt
 									billboard.AlwaysOnTop = true
-									billboard.Parent = spinner -- Parent to part handles cleanup
+									billboard.Parent = spinner 
 									
 									local img = Instance.new("ImageLabel")
 									img.BackgroundTransparency = 1
 									img.Size = UDim2.new(1, 0, 1, 0)
-									img.Image = "rbxassetid://1266170131" -- Original Star Texture
-									img.ImageColor3 = Color3.fromRGB(255, 230, 50) -- Yellow
+									img.Image = "rbxassetid://4321867290" -- [User Provided] Better Star Texture
+									img.ImageColor3 = Color3.fromRGB(255, 230, 50)
 									img.Parent = billboard
 								end
 								
 								stunModel.Parent = character
-							end
-							
-							-- Release control back to client after fling
-							-- Stun Duration: 3 seconds (User Request)
-							-- Release control back to client after fling
-							-- Stun Duration: 3 seconds (User Request)
-							task.delay(3, function()
-								humanoid.PlatformStand = false
-								GLOBAL_DEBOUNCE[character] = nil
-								if rootPart:CanSetNetworkOwnership() then
-									-- Reverting to auto/nil usually fine, the client will grab it back
-									rootPart:SetNetworkOwner(nil) 
-								end
 								
-								-- Extend visual effect slightly to cover the 'Getting Up' animation (1.5s delay)
-								-- (User feedback: Stars vanish but can't move for 1-2s. GettingUp state locks movement)
-								task.delay(1.5, function()
-									if stunModel then
-										stunModel:Destroy()
+								-- Release control back to client after fling
+								-- Stun Duration: 3 seconds (User Request)
+								task.delay(3, function()
+									humanoid.PlatformStand = false
+									GLOBAL_DEBOUNCE[character] = nil
+									if rootPart:CanSetNetworkOwnership() then
+										rootPart:SetNetworkOwner(nil) 
 									end
-									-- Cleanup head attachment if it survived
-									local oldAtt = head:FindFirstChild("AttStunHead")
-									if oldAtt then oldAtt:Destroy() end
+									
+									-- Extend visual effect slightly to cover the 'Getting Up' animation (1.5s delay)
+									task.delay(1.5, function()
+										if stunModel then
+											stunModel:Destroy()
+										end
+										-- Cleanup head attachment
+										local oldAtt = head:FindFirstChild("AttStunHead")
+										if oldAtt then oldAtt:Destroy() end
+										
+										-- [Added] Revert Face
+										if face and originalFace then
+											face.Texture = originalFace
+										end
+									end)
 								end)
-							end)
+							end
 						end
 					end
 				end

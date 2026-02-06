@@ -1053,6 +1053,36 @@ function MapGenerator.CreateBoundaryZone(parent, mapSize)
 		warning:SetAttribute("DamageZone", true)
 	end
 	
+	-- [Added] Physical Boundary Walls
+	local wallHeight = 50
+	local wallThickness = 1
+	local wallColor = Color3.fromRGB(150, 150, 150)
+	local wallTransparency = 0.5
+	
+	local wallData = {
+		-- 북쪽 벽
+		{pos = Vector3.new(0, wallHeight/2, -halfSize), size = Vector3.new(mapSize, wallHeight, wallThickness)},
+		-- 남쪽 벽
+		{pos = Vector3.new(0, wallHeight/2, halfSize), size = Vector3.new(mapSize, wallHeight, wallThickness)},
+		-- 서쪽 벽
+		{pos = Vector3.new(-halfSize, wallHeight/2, 0), size = Vector3.new(wallThickness, wallHeight, mapSize)},
+		-- 동쪽 벽
+		{pos = Vector3.new(halfSize, wallHeight/2, 0), size = Vector3.new(wallThickness, wallHeight, mapSize)},
+	}
+	
+	for i, data in ipairs(wallData) do
+		local wall = Instance.new("Part")
+		wall.Name = "BoundaryWall" .. i
+		wall.Size = data.size
+		wall.Position = data.pos
+		wall.Color = wallColor
+		wall.Transparency = wallTransparency
+		wall.Material = Enum.Material.SmoothPlastic
+		wall.Anchored = true
+		wall.CanCollide = true
+		wall.Parent = boundaryFolder
+	end
+	
 	-- 킬 브릭 (바닥 아래)
 	local killBrick = Instance.new("Part")
 	killBrick.Name = "KillBrick"

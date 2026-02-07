@@ -224,12 +224,9 @@ RunService.Heartbeat:Connect(function(dt)
 					
 						if humanoid and rootPart and humanoid.Health > 0 then
 							-- Check for Spawn Protection (ForceField)
-							if character:FindFirstChildOfClass("ForceField") then
-								-- Skip collision if player is invincible
-								return 
-							end
+							local hasForceField = character:FindFirstChildOfClass("ForceField")
 
-							if not GLOBAL_DEBOUNCE[character] then
+							if not hasForceField and not GLOBAL_DEBOUNCE[character] then
 								GLOBAL_DEBOUNCE[character] = true
 								
 								-- print("Hit Character:", character.Name)
@@ -337,8 +334,8 @@ RunService.Heartbeat:Connect(function(dt)
 								
 								stunModel.Parent = character
 								
-								-- Release control back to client after fling
-								-- Stun Duration: 3 seconds (User Request)
+								-- Combined Stun Cleanup
+								-- Total 4.5s: 3s movement lock + 1.5s visual decay
 								task.delay(3, function()
 									humanoid.PlatformStand = false
 									GLOBAL_DEBOUNCE[character] = nil
@@ -346,16 +343,11 @@ RunService.Heartbeat:Connect(function(dt)
 										rootPart:SetNetworkOwner(nil) 
 									end
 									
-									-- Extend visual effect slightly to cover the 'Getting Up' animation (1.5s delay)
 									task.delay(1.5, function()
-										if stunModel then
-											stunModel:Destroy()
-										end
-										-- Cleanup head attachment
+										if stunModel then stunModel:Destroy() end
 										local oldAtt = head:FindFirstChild("AttStunHead")
 										if oldAtt then oldAtt:Destroy() end
 										
-										-- [Added] Revert Face
 										if face and originalFace then
 											face.Texture = originalFace
 										end

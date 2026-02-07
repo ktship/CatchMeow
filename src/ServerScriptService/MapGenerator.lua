@@ -1,9 +1,36 @@
 -- MapGenerator.lua
 -- ServerScriptService에 위치해야 합니다.
+print("[MapGenerator] SCRIPT START - Reading file...")
 -- 게임 시작 시 도시 맵을 생성합니다.
-print("[MapGenerator] Loaded v1.5 (No Bungeoppang World Spawn)")
+print("[MapGenerator] Loaded v4.25c (Target Beam Restored)")
+
+local HttpService = game:GetService("HttpService")
 
 local MapGenerator = {}
+
+-- [Hoisted Constants] Cat Variety Data
+if not _G.FoodClaims then
+	_G.FoodClaims = setmetatable({}, {__mode = "k"}) -- [v4.12] Global Singleton Lock
+end
+local FoodClaims = _G.FoodClaims 
+local CAT_COLORS = {
+	White = Color3.fromRGB(245, 245, 245),
+	Black = Color3.fromRGB(30, 30, 30),
+	Orange = Color3.fromRGB(220, 140, 60),
+	Grey = Color3.fromRGB(120, 120, 120),
+	Cream = Color3.fromRGB(240, 230, 200),
+	Brown = Color3.fromRGB(100, 70, 50),
+	DarkGrey = Color3.fromRGB(60, 60, 60),
+}
+
+local CAT_EYE_COLORS = {
+	Color3.fromRGB(0, 220, 255), -- Cyan
+	Color3.fromRGB(100, 255, 100), -- Green
+	Color3.fromRGB(255, 220, 0), -- Yellow
+	Color3.fromRGB(255, 150, 0), -- Amber
+}
+
+local CAT_PATTERN_TYPES = {"Solid", "Tuxedo", "Spotted", "Calico", "Pointed", "Tabby"}
 
 local Config = require(game.ReplicatedStorage:WaitForChild("Config"))
 local DataStoreService = game:GetService("DataStoreService")
@@ -29,6 +56,17 @@ local function createPart(name, size, position, color, material, parent)
 	part.CanCollide = true
 	part.Parent = parent
 	return part
+end
+
+-- [Helper] Safely get position from Model, Part, or Accessory
+local function getItemPos(item)
+	if not item then return nil end
+	if item:IsA("PVInstance") then
+		return item:GetPivot().Position
+	elseif item:IsA("Accessory") and item:FindFirstChild("Handle") then
+		return item.Handle.Position
+	end
+	return nil
 end
 
 function MapGenerator.ClearMap()
@@ -413,13 +451,17 @@ function MapGenerator.GenerateProcedural()
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 	
 	-- [Added] Wandering Cats (Increased to 110)
+	local catsFolder = Instance.new("Folder")
+	catsFolder.Name = "Cats"
+	catsFolder.Parent = mapFolder
+
 	for i = 1, 110 do
 		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		-- 지형 높이 계산하여 정확한 위치에 스폰
 		local groundY = getHeight(cx, cz) 
 		local catCF = CFrame.new(cx, groundY + 1, cz)
-		MapGenerator.SpawnCat(catCF, mapFolder)
+		MapGenerator.SpawnCat(catCF, catsFolder)
 	end
 	
 	-- [Added] World Items (Disabled temporarily)
@@ -561,13 +603,17 @@ function MapGenerator.LoadMapFromData(mapData)
 	MapGenerator.CreateTunnels(mapFolder, mapSize) -- [Added] Regenerate Tunnels
 	
 	-- [Added] Wandering Cats (Increased to 110)
+	local catsFolder = Instance.new("Folder")
+	catsFolder.Name = "Cats"
+	catsFolder.Parent = mapFolder
+
 	for i = 1, 110 do
 		-- Note: getHeight is not available here, but LoadMapFromData usually assumes flat near road or uses saved height.
 		-- For simplicity, keeping it at 100 -> 110.
 		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local catCF = CFrame.new(cx, 1, cz)
-		MapGenerator.SpawnCat(catCF, mapFolder)
+		MapGenerator.SpawnCat(catCF, catsFolder)
 	end
 end
 
@@ -1503,19 +1549,7 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 	if not itemDef then return end
 	
 	-- 지면 높이 찾기 (레이캐스트)
-	-- [DEBUG] Road Check
-	local roadAmp = 50 -- Config.Map.Road.Amplitude
-	local roadFreq = 0.02 -- Frequency
-	local roadW = 22 -- Width
-	local calcRoadX = roadAmp * math.sin(position.Z * roadFreq)
-	local dist = math.abs(position.X - calcRoadX)
-	print(string.format("[MapGen] Item '%s' at (%.1f, %.1f). RoadX: %.1f. Dist: %.1f (Limit: %.1f)", itemId, position.X, position.Z, calcRoadX, dist, roadW/2))
-	
-	if dist < roadW/2 + 2 then
-		print("⚠️ WARNING: Item is ON THE ROAD!")
-	else
-		print("✅ Item is OFF ROAD.")
-	end
+	-- [DEBUG] Road Check (Optional check removed for cleanliness)
 
 	local rayResult = workspace:Raycast(position + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0))
 	local groundY = position.Y
@@ -1538,64 +1572,63 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 		part.Anchored = true
 		part.CanCollide = false
 		part.Parent = parent
+		
+		-- [Added] Food Tag for AI
+		if itemId == "Bungeoppang" or itemId == "Stick" then -- Stick isn't food but tagging for consistency
+			part:SetAttribute("IsFood", true)
+		end
 	elseif itemId == "Bungeoppang" then
 		-- 붕어빵 (From Assets)
 		local assets = game:GetService("ReplicatedStorage"):WaitForChild("Assets", 5)
 		local sourceItem = assets and assets:FindFirstChild("Bungeoppang")
 		
 		if sourceItem then
+			print("[MapGenerator] SpawnWorldItem Called. UUID: " .. HttpService:GenerateGUID(false))
 			local model = sourceItem:Clone()
-			model.Name = "WorldItem_" .. itemId
 			
-			-- 위치 설정 (Model vs Part)
-			if model:IsA("Model") then
-				model:PivotTo(CFrame.new(position.X, groundY + 0.5, position.Z) * CFrame.Angles(math.rad(-90), math.random() * math.pi, 0))
-				
-				-- 앵커 설정 (월드 아이템은 고정)
-				for _, d in ipairs(model:GetDescendants()) do
-					if d:IsA("BasePart") then
-						d.Anchored = true
-						d.CanCollide = false
-					end
-				end
-				part = model.PrimaryPart or model:GetChildren()[1] -- ClickDetector용
-			elseif model:IsA("Accessory") then
-				-- Accessory 처리
-				local handle = model:FindFirstChild("Handle")
-				if handle then
-					-- 크기 확대 (2.5배) - 월드는 2.5배 유지
-					local scale = 2.5
-					handle.Size = handle.Size * scale
-					local mesh = handle:FindFirstChildOfClass("SpecialMesh")
-					if mesh then
-						mesh.Scale = mesh.Scale * scale
-					end
-					
-					-- 눕히기: 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
-					local targetRotation = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
-					local heightOffset = -0.4 -- -0.35에서 약간 더 내려서 공중에 뜨는 느낌 해결
-					
-					handle.CFrame = CFrame.new(position.X, groundY + heightOffset, position.Z) * targetRotation
-					
-					print(string.format("[MapGenerator] Bungeoppang Placed at (%.2f, %.2f, %.2f)", handle.Position.X, handle.Position.Y, handle.Position.Z))
-					print(string.format("[MapGenerator] Rotation (Deg): %.2f, %.2f, %.2f", handle.Orientation.X, handle.Orientation.Y, handle.Orientation.Z))
-
-					handle.Anchored = true
-					handle.CanCollide = false
-					part = handle -- ClickDetector 부착 대상
-				else
-					-- Handle이 없으면 빈 파트라도...
-					part = Instance.new("Part")
-					part.Parent = model
-				end
+			-- [v4.23z] Flatten Accessory to Model to prevent auto-wearing
+			local innerModel = Instance.new("Model")
+			innerModel.Name = "Inner_" .. itemId
+			
+			local handle = nil
+			if model:IsA("Accessory") then
+				handle = model:FindFirstChild("Handle")
+				if handle then handle.Parent = innerModel end
+				model:Destroy()
+			elseif model:IsA("Model") then
+				for _, c in ipairs(model:GetChildren()) do c.Parent = innerModel end
+				model:Destroy()
 			else
-				-- Single Part
-				model.Position = Vector3.new(position.X, groundY + 0.5, position.Z)
-				model.Anchored = true
-				model.CanCollide = false
-				part = model
+				model.Parent = innerModel
+				if model:IsA("BasePart") then handle = model end
 			end
-			model.Parent = parent
+			model = innerModel
+			
+			-- [v4.23z] Monolithic Setup for Flattened Model
+			local targetHandle = model:FindFirstChild("Handle") or model:FindFirstChildOfClass("BasePart")
+			if targetHandle then
+				-- [v4.25a] Restore 2.5x Scaling
+				local scaleCount = 2.5
+				targetHandle.Size = targetHandle.Size * scaleCount
+				local mesh = targetHandle:FindFirstChildOfClass("SpecialMesh")
+				if mesh then
+					mesh.Scale = mesh.Scale * scaleCount
+				end
+
+				targetHandle.CFrame = CFrame.new(position.X, groundY - 0.4, position.Z) * CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
+				targetHandle.Anchored = true
+				targetHandle.CanCollide = false
+			end
+			
+			local wrapperModel = Instance.new("Model")
+			wrapperModel.Name = "WorldItem_" .. itemId
+			wrapperModel.Parent = parent
+			model.Parent = wrapperModel
+			wrapperModel.PrimaryPart = targetHandle
+			wrapperModel:SetAttribute("IsFood", true)
+			
+			part = targetHandle -- ClickDetector 부착 대상
+			print(string.format("[MapGenerator] Spawned Item. Sibling Count in WorldItems: %d", #parent:GetChildren()))
 		else
 			-- Fallback (Simple Part) if Asset not ready
 			part = Instance.new("Part")
@@ -1657,8 +1690,13 @@ end
 
 -- 고양이 NPC 생성 (Wandering AI)
 function MapGenerator.SpawnCat(locationCF, parent)
+	local catId = HttpService:GenerateGUID(false)
+	local shortId = string.sub(catId, 1, 4)
+	-- [DEBUG] Verify Memory Table Sharing
+	print(string.format("[AI] %s Spawned. FoodClaims Table: %s", shortId, tostring(FoodClaims)))
+	
 	local model = Instance.new("Model")
-	model.Name = "Cat"
+	model.Name = "Cat_" .. shortId
 	model.Parent = parent
 	
 	-- Humanoid
@@ -1667,50 +1705,32 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	hum.Parent = model
 	
 	-- [Variety Logic] - Colors & Patterns
-	local colors = {
-		White = Color3.fromRGB(245, 245, 245),
-		Black = Color3.fromRGB(30, 30, 30),
-		Orange = Color3.fromRGB(220, 140, 60),
-		Grey = Color3.fromRGB(120, 120, 120),
-		Cream = Color3.fromRGB(240, 230, 200),
-		Brown = Color3.fromRGB(100, 70, 50),
-		DarkGrey = Color3.fromRGB(60, 60, 60),
-	}
-	
-	local eyeColors = {
-		Color3.fromRGB(0, 220, 255), -- Cyan
-		Color3.fromRGB(100, 255, 100), -- Green
-		Color3.fromRGB(255, 220, 0), -- Yellow
-		Color3.fromRGB(255, 150, 0), -- Amber
-	}
-	
-	local patternTypes = {"Solid", "Tuxedo", "Spotted", "Calico", "Pointed", "Tabby"}
-	local selectedPattern = patternTypes[math.random(1, #patternTypes)]
+	local selectedPattern = CAT_PATTERN_TYPES[math.random(1, #CAT_PATTERN_TYPES)]
 	
 	-- Base Setup
-	local baseColor = colors.White
-	local accentColor = colors.White
-	local eyeColor = eyeColors[math.random(1, #eyeColors)]
+	local baseColor = CAT_COLORS.White
+	local accentColor = CAT_COLORS.White
+	local eyeColor = CAT_EYE_COLORS[math.random(1, #CAT_EYE_COLORS)]
 	
 	if selectedPattern == "Solid" then
 		local keys = {"White", "Black", "Orange", "Grey", "Cream", "Brown"}
-		baseColor = colors[keys[math.random(1, #keys)]]
+		baseColor = CAT_COLORS[keys[math.random(1, #keys)]]
 		accentColor = baseColor
 	elseif selectedPattern == "Tuxedo" then
-		baseColor = (math.random() > 0.5) and colors.Black or colors.Grey
-		accentColor = colors.White
+		baseColor = (math.random() > 0.5) and CAT_COLORS.Black or CAT_COLORS.Grey
+		accentColor = CAT_COLORS.White
 	elseif selectedPattern == "Spotted" then
-		baseColor = colors.White
+		baseColor = CAT_COLORS.White
 		local keys = {"Black", "Orange", "Grey", "Brown"}
-		accentColor = colors[keys[math.random(1, #keys)]]
+		accentColor = CAT_COLORS[keys[math.random(1, #keys)]]
 	elseif selectedPattern == "Calico" then
-		baseColor = colors.White
+		baseColor = CAT_COLORS.White
 	elseif selectedPattern == "Pointed" then
-		baseColor = colors.Cream
-		accentColor = colors.Brown
+		baseColor = CAT_COLORS.Cream
+		accentColor = CAT_COLORS.Brown
 	elseif selectedPattern == "Tabby" then
-		baseColor = (math.random() > 0.5) and colors.Orange or colors.Grey
-		accentColor = (baseColor == colors.Orange) and colors.Brown or colors.DarkGrey
+		baseColor = (math.random() > 0.5) and CAT_COLORS.Orange or CAT_COLORS.Grey
+		accentColor = (baseColor == CAT_COLORS.Orange) and CAT_COLORS.Brown or CAT_COLORS.DarkGrey
 	end
 	
 	-- Set Attribute for Mission
@@ -1749,7 +1769,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		for i = 1, math.random(2, 4) do
 			local spotColor = accentColor
 			if selectedPattern == "Calico" then
-				spotColor = (math.random() > 0.5) and colors.Orange or colors.Black
+				spotColor = (math.random() > 0.5) and CAT_COLORS.Orange or CAT_COLORS.Black
 			end
 			local spotSize = Vector3.new(math.random(4, 7)/10, 0.05, math.random(5, 8)/10)
 			-- Z-fighting 방지를 위해 몸통 표면에서 0.02 stud 띄우고, 각 얼룩마다 미세하게 높이를 다르게 설정 (i * 0.001)
@@ -1759,11 +1779,13 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		end
 	elseif selectedPattern == "Tuxedo" then
 		-- 가슴 패치도 Z-fighting 방지를 위해 조금 더 띄움 (-1.01 -> -1.02)
-		makePart("ChestPatch", Vector3.new(0.6, 0.8, 0.05), colors.White, CFrame.new(0, 1.5, -1.02), torso)
+		makePart("ChestPatch", Vector3.new(0.6, 0.8, 0.05), CAT_COLORS.White, CFrame.new(0, 1.5, -1.02), torso)
 	end
 	
 	-- Head
 	local headColor = (selectedPattern == "Pointed") and accentColor or baseColor
+	-- [v4.23e] Fix: Pass 'torso' to weld Head to Body
+	-- [v4.23l] Revert: Head is Anchored again for manual animation
 	local head = makePart("Head", Vector3.new(0.8, 0.8, 0.8), headColor, CFrame.new(0, 2.2, -0.8))
 	-- Move eyes and ears relative to head initial CFrame for the helper
 	makePart("EyeL", Vector3.new(0.15, 0.15, 0.05), eyeColor, CFrame.new(-0.2, 2.3, -1.21), head)
@@ -1776,6 +1798,8 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	-- Tail
 	local tailLength = 1.2
 	local tailColor = (selectedPattern == "Pointed") and accentColor or baseColor
+	-- [v4.23e] Fix: Pass 'torso' to weld Tail to Body
+	-- [v4.23l] Revert: Tail is Anchored again for manual animation
 	local tail = makePart("Tail", Vector3.new(0.2, 0.2, tailLength), tailColor, CFrame.new(0, 2.0, 1.0) * CFrame.Angles(math.rad(45), 0, 0))
 	
 	-- Legs
@@ -1783,9 +1807,10 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	local useSocks = (selectedPattern == "Tuxedo") or (math.random() > 0.7)
 	
 	local function makeLeg(name, cf)
-		local l = makePart(name, legSize, baseColor, cf)
+		local legColor = (selectedPattern == "Pointed") and accentColor or baseColor
+		local l = makePart(name, legSize, legColor, cf)
 		if useSocks then
-			makePart(name.."Sock", Vector3.new(0.32, 0.2, 0.32), colors.White, cf * CFrame.new(0, -0.4, 0), l)
+			makePart(name.."Sock", Vector3.new(0.32, 0.2, 0.32), CAT_COLORS.White, cf * CFrame.new(0, -0.4, 0), l)
 		end
 		return l
 	end
@@ -1797,31 +1822,250 @@ function MapGenerator.SpawnCat(locationCF, parent)
 
 	-- AI Loop (Non-blocking Physics + State Machine)
 	task.spawn(function()
+		print(string.format("[AI] %s THREAD START", shortId))
 		local speed = 8 -- studs/sec
-		local state = "Idle" -- Idle, Moving
+		local state = "Idle" -- Idle, Moving, MovingToFood, Eating
 		local targetPos = nil
+		local targetFood = nil
 		
 		-- Idle Timer
 		local idleTimer = 0
 		local idleDuration = math.random(2, 5)
+		local searchCooldown = 0 -- [v4.4] Prevent rapid re-search
+		
+		-- [v3.9/v4.0/v4.2/v4.3] Centralized State Reset & Visual Cleanupck physics position independently of visual animation
+		local cleanPos = torso.Position
+		
+		local attCat = Instance.new("Attachment")
+		attCat.Name = "AttCat"
+		attCat.Parent = head
+		
+		local targetAtt = Instance.new("Attachment")
+		targetAtt.Name = "AttTarget"
+		targetAtt.Parent = workspace.Terrain
+		
+		local targetBeam = Instance.new("Beam")
+		targetBeam.Name = "LockOnBeam"
+		targetBeam.Attachment0 = attCat
+		targetBeam.Attachment1 = targetAtt
+		targetBeam.Width0 = 0.2
+		targetBeam.Width1 = 0.2
+		targetBeam.FaceCamera = true
+		targetBeam.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0)) -- Yellow
+		targetBeam.LightEmission = 1
+		targetBeam.Enabled = false
+		targetBeam.Parent = head
+		
+		-- [v3.9/v4.0/v4.2/v4.3] Centralized State Reset & Visual Cleanup
+		local function transitionToIdle(reason)
+			state = "Idle"
+			idleTimer = 0
+			if targetBeam then targetBeam.Enabled = false end
+			if targetFood and targetFood.Parent then
+				-- [v4.3] Restore pickup if we were eating it
+				local cd = targetFood:FindFirstChildOfClass("ClickDetector")
+				if cd then cd.MaxActivationDistance = 32 end -- Default range
+				
+				-- [v4.8] Release Memory Lock
+				if FoodClaims[targetFood] == catId then
+					FoodClaims[targetFood] = nil
+					targetFood:SetAttribute("ClaimedBy", nil)
+					print(string.format("[AI] %s RELEASED Memory Lock on %s", shortId, targetFood.Name))
+				elseif FoodClaims[targetFood] then
+					print(string.format("[AI] %s WANTED release %s but Lock held by %s. (My Claim? %s)", shortId, targetFood.Name, tostring(FoodClaims[targetFood]), tostring(targetFood:GetAttribute("ClaimedBy"))))
+				end
+				
+				-- Clear attributes for visual sync
+				if targetFood:GetAttribute("ClaimRequest") == catId then
+					targetFood:SetAttribute("ClaimRequest", nil)
+				end
+				if targetFood:GetAttribute("EatingBy") == catId then
+					targetFood:SetAttribute("EatingBy", nil)
+				end
+			end
+			targetFood = nil
+			-- searchCooldown = 1.0 -- [v4.8] Removed cooldown as memory lock is instant
+		end
+		
+		-- Food Search Timer
+		local searchTimer = math.random() * 0.5 
 		
 		-- Raycast Params
 		local rayParams = RaycastParams.new()
-		rayParams.FilterDescendantsInstances = {model}
+		-- [Prevent Stacking] Exclude the entire Cats folder so cats don't detect each other as ground
+		rayParams.FilterDescendantsInstances = {parent}
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
 		
 		local TICK_RATE = 0.05
 		
+		local nextXZ = cleanPos -- [v4.23e] Initialize nextXZ outside loop for persistence
+		-- [v4.25b] Logic Rotation: Store heading separately to prevent animation accumulation
+		local logicRotation = torso.CFrame.Rotation
+		
 		while model and model.Parent do
-			local currentPos = torso.Position
-			local nextXZ = currentPos -- Default horizontal position
+			task.wait(TICK_RATE)
+			local currentPos = cleanPos -- [v2.4] Use clean physics position as base
+			
+			-- [v4.23e] PHYSICS MOVED TO TOP (To avoid skipping)
+			-- Prepare Physics Vars
+			if not model:GetAttribute("VerticalVelocity") then
+				model:SetAttribute("VerticalVelocity", 0)
+				model:SetAttribute("IsJumping", false)
+			end
+			
+			local vVel = model:GetAttribute("VerticalVelocity") or 0
+			local isJumping = model:GetAttribute("IsJumping") == true
+			local gravity = 80
+			local jumpPower = 35
+			local groundThreshold = 2.5
+			local maxJumpHeight = 3 
+			
+			-- Check Ground at Next XZ
+			local rayOrigin = Vector3.new(nextXZ.X, currentPos.Y + 5, nextXZ.Z)
+			local rayDir = Vector3.new(0, -20, 0)
+			local rayRes = workspace:Raycast(rayOrigin, rayDir, rayParams)
+			
+			local groundHeight = 0
+			if rayRes then
+				groundHeight = rayRes.Position.Y + 1.5
+			else
+				groundHeight = currentPos.Y - 1 
+			end
+			
+			local finalY = currentPos.Y
+			
+			if not isJumping then
+				-- JUMP START CHECK
+				local heightDiff = groundHeight - currentPos.Y
+				
+				if heightDiff > maxJumpHeight then
+					-- Unreachable
+					-- transitionToIdle("Unreachable") -- Cannot call function defined below? No, it's defined above loop.
+					-- But wait: transitionToIdle sets state="Idle".
+					-- But wait: transitionToIdle sets state="Idle".
+					-- If we call it here, it changes state for logic below. VALID.
+					if state ~= "Eating" then
+						transitionToIdle("Unreachable")
+					end
+					nextXZ = currentPos 
+					finalY = currentPos.Y
+					idleDuration = 0.5 
+				elseif heightDiff > groundThreshold and heightDiff <= maxJumpHeight then
+					isJumping = true
+					vVel = jumpPower
+				else
+					-- GROUND STICK
+					local diff = groundHeight - currentPos.Y
+					
+					if diff < -2 then
+						isJumping = true
+					else
+						if diff > 0 and diff > maxJumpHeight then
+							nextXZ = currentPos
+							finalY = currentPos.Y
+						else
+							finalY = currentPos.Y + (diff * 0.3)
+							if math.abs(finalY - groundHeight) < 0.2 then
+								finalY = groundHeight
+							end
+						end
+					end
+				end
+			end
+			
+			if isJumping then
+				vVel = vVel - (gravity * TICK_RATE)
+				finalY = currentPos.Y + (vVel * TICK_RATE)
+				
+				if finalY <= groundHeight then
+					finalY = groundHeight
+					vVel = 0
+					isJumping = false
+				end
+				
+				model:SetAttribute("VerticalVelocity", vVel)
+				model:SetAttribute("IsJumping", isJumping)
+			end
+			
+			-- Update Transform
+			cleanPos = Vector3.new(nextXZ.X, finalY, nextXZ.Z)
+			-- [v4.25b] Reset orientation from logicRotation BEFORE applying animations
+			torso.CFrame = CFrame.new(cleanPos) * logicRotation
+			
+			-- [v4.23h] Sync Logic Base
+			currentPos = cleanPos
+			nextXZ = currentPos
+			
+			-- Timers
+			idleTimer += TICK_RATE
+			searchTimer += TICK_RATE
 			
 			-- 1. State Logic
 			if state == "Idle" then
-				idleTimer += TICK_RATE
+				-- Search for food every 0.5 seconds
+				if searchTimer >= 0.5 and searchCooldown <= 0 then
+					searchTimer = 0
+					local worldItems = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WorldItems")
+					if worldItems then
+						local closestFood = nil
+						local minDist = 50
+						
+						for _, item in ipairs(worldItems:GetChildren()) do
+							-- [v4.23o] Assign Unique ID for Debugging
+							if not item:GetAttribute("RefID") then
+								item:SetAttribute("RefID", HttpService:GenerateGUID(false):sub(1, 8))
+							end
+							
+							-- [v4.8] Check Centralized Memory Lock
+							local isLocked = (FoodClaims[item] ~= nil)
+							local eatingBy = item:GetAttribute("EatingBy")
+							
+							if item:GetAttribute("IsFood") and not isLocked and not eatingBy then
+								local pos = getItemPos(item)
+								if pos then
+									local dirToFood = (pos - torso.Position).Unit
+									local dot = torso.CFrame.LookVector:Dot(dirToFood)
+									
+									-- [v3.2] Use 120-degree cone (Dot product > 0.5)
+									if dot > 0.5 then
+										local dist = (torso.Position - pos).Magnitude
+										if dist < minDist then
+											minDist = dist
+											closestFood = item
+										end
+									end
+								end
+							end
+						end
+						
+						if closestFood then
+							local foodPos = getItemPos(closestFood) -- [v4.10] Restored definition
+							if foodPos then
+								-- [v4.8] ATOMIC MEMORY LOCK
+								if FoodClaims[closestFood] == nil then
+									-- INSTANT LOCK
+									FoodClaims[closestFood] = catId
+									closestFood:SetAttribute("ClaimedBy", catId) -- Visual Sync
+									
+									print(string.format("[AI] %s LOCKED %s (%s) in Memory [Table: %s]", shortId, closestFood.Name, tostring(closestFood:GetAttribute("RefID")), tostring(FoodClaims)))
+									targetFood = closestFood
+									state = "MovingToFood"
+									
+									-- [v3.8] Visuals
+									targetAtt.WorldPosition = foodPos
+									targetBeam.Enabled = true -- [v4.25c] Restored targeting beam
+								else
+									-- Already Locked
+									-- print(string.format("[AI] %s IGNORED %s (Locked by %s)", shortId, closestFood.Name, tostring(FoodClaims[closestFood])))
+								end
+							end
+						end
+					end
+				end -- [v4.18] Close searchTimer
+
 				
-				if idleTimer >= idleDuration then
-					-- Switch to Moving
+				if state == "Idle" and idleTimer >= idleDuration then
+					-- Switch to Moving (Normal Wander)
 					local range = 30
 					local rx = math.random(-range, range)
 					local rz = math.random(-range, range)
@@ -1839,7 +2083,6 @@ function MapGenerator.SpawnCat(locationCF, parent)
 						idleDuration = 1
 					end
 				end
-				
 			elseif state == "Moving" and targetPos then
 				local dirVector = (targetPos - currentPos)
 				local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
@@ -1856,124 +2099,160 @@ function MapGenerator.SpawnCat(locationCF, parent)
 					nextXZ = currentPos + dir * step
 					
 					-- Rotation (Only when moving)
-					local lookCF = CFrame.lookAt(currentPos, Vector3.new(targetPos.X, currentPos.Y, targetPos.Z))
-					torso.CFrame = CFrame.new(torso.Position) * lookCF.Rotation
+					-- [v4.22] Safety check for degenerate lookAt
+					if (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)).Magnitude > 0.1 then
+						local lookCF = CFrame.lookAt(currentPos, Vector3.new(targetPos.X, currentPos.Y, targetPos.Z))
+						logicRotation = lookCF.Rotation -- [v4.25b] Save only to logicRotation
+					end
 				end
-			end
-			
-			-- 2. PHYSICS (Always Run)
-			-- Calculates Y for nextXZ (which is currentPos if Idle)
-			
-			-- Prepare Physics Vars
-			if not model:GetAttribute("VerticalVelocity") then
-				model:SetAttribute("VerticalVelocity", 0)
-				model:SetAttribute("IsJumping", false)
-			end
-			
-			local vVel = model:GetAttribute("VerticalVelocity") or 0
-			local isJumping = model:GetAttribute("IsJumping") == true
-			local gravity = 80
-			local jumpPower = 35
-			local groundThreshold = 2.5
-			local maxJumpHeight = 3 -- 최대 점프 가능 높이 (차나 지붕 점프 불가)
-			
-			-- Check Ground at Next XZ
-			local groundHeight = -100
-			local rayRes = workspace:Raycast(nextXZ + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0), rayParams)
-			
-			if rayRes then
-				groundHeight = rayRes.Position.Y + 1.5
-			else
-				-- If no ground found (void), maybe keep old Height? Or fall?
-				-- Let's try to maintain last valid Y or fall slowly?
-				-- For safety, use current Y if void
-				groundHeight = currentPos.Y - 1 -- Simulate dropping?
-			end
-			
-			local finalY = currentPos.Y
-			
-			if not isJumping then
-				-- JUMP START CHECK
-				local heightDiff = groundHeight - currentPos.Y
 				
-				-- 점프 불가능한 높이 체크 (차, 건물 등)
-				if heightDiff > maxJumpHeight then
-					-- 너무 높음 - 이동 취소, 제자리 유지
-					nextXZ = currentPos -- 이동 취소
-					finalY = currentPos.Y
-					-- 새 목적지 찾기
-					state = "Idle"
-					idleTimer = 0
-					idleDuration = 0.5 -- 빠르게 새 방향 찾기
-				elseif heightDiff > groundThreshold and heightDiff <= maxJumpHeight then
-					-- 점프 가능한 높이
-					isJumping = true
-					vVel = jumpPower
+			elseif state == "MovingToFood" then
+				-- [v4.23n] Ghost Eating Fix: Check if food still exists properly
+				if not targetFood or not targetFood.Parent then
+					print(string.format("[AI] %s ABORT: %s is gone (Despawned/Destroyed)", shortId, targetFood and targetFood.Name or "nil"))
+					transitionToIdle("FoodDespawned")
+				
+				-- [v4.8] Verify Memory Lock
+				elseif FoodClaims[targetFood] ~= catId then
+					print(string.format("[AI] %s ALERT: Lost Memory Lock on %s! Held by: %s", shortId, targetFood and targetFood.Name or "nil", tostring(FoodClaims[targetFood])))
+					transitionToIdle("LockLost")
 				else
-					-- GROUND STICK / FALL CHECK
-					local diff = groundHeight - currentPos.Y
-					
-					if diff < -2 then
-						-- Falling (Ground dropped below)
-						isJumping = true -- Treat as freefall
+					-- [v4.2] Give up if SOMEONE ELSE starts eating our target
+					local eater = targetFood:GetAttribute("EatingBy")
+					if eater and eater ~= catId then
+						print(string.format("[AI] %s ABORT: %s is being eaten by %s", shortId, targetFood.Name, tostring(eater)))
+						transitionToIdle("ClaimedByOther")
 					else
-						-- Stick to Ground (Smooth Lerp)
-						-- 단, 올라가는 경우 maxJumpHeight 제한 적용
-						if diff > 0 and diff > maxJumpHeight then
-							-- 너무 높음 - 이동 취소
-							nextXZ = currentPos
-							finalY = currentPos.Y
+						-- [v3.9] Validate Position (Despawn check)
+						local foodPos = getItemPos(targetFood)
+						if not foodPos then
+							print(string.format("[AI] %s ABORT: Cannot find position for %s (Despawned?)", shortId, targetFood.Name))
+							transitionToIdle("FoodDespawned")
 						else
-							finalY = currentPos.Y + (diff * 0.3)
-							if math.abs(finalY - groundHeight) < 0.2 then
-								finalY = groundHeight
+							-- Move towards foodPos
+							local dirVector = (foodPos - currentPos)
+							local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
+						
+						if flatDir.Magnitude < 1.8 then
+							-- [REACHED FOOD] Start Eating
+							
+							-- [v4.23n] Final Existence Check
+							if not targetFood or not targetFood.Parent then
+								transitionToIdle("FoodDespawnedAtLastMoment")
+							
+							-- Final confirmation
+							elseif FoodClaims[targetFood] == catId then
+								state = "Eating"
+								idleTimer = 0
+								
+								-- [v4.2] Set Exclusive Eating Attribute
+								targetFood:SetAttribute("EatingBy", catId)
+								print(string.format("[AI] %s STARTED EATING %s (%s) -> EatingBy Locked", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+								
+								-- [v4.3] Disable Pickup for players
+								local cd = targetFood:FindFirstChildOfClass("ClickDetector")
+								if cd then cd.MaxActivationDistance = 0 end
+								
+								-- [v4.25c] Restored targeting beam cleanup
+								targetBeam.Enabled = false
+								-- [VISUAL FEEDBACK]
+								local heartGUI = Instance.new("BillboardGui")
+								heartGUI.Name = "HappyHeart"
+								heartGUI.Size = UDim2.new(2, 0, 2, 0)
+								heartGUI.Adornee = head
+								heartGUI.StudsOffset = Vector3.new(0, 2, 0)
+								heartGUI.Parent = head
+								
+								local label = Instance.new("TextLabel")
+								label.BackgroundTransparency = 1
+								label.Size = UDim2.new(1, 0, 1, 0)
+								label.Text = "❤️"
+								label.TextScaled = true
+								label.Parent = heartGUI
+								
+								task.delay(2.5, function()
+									if heartGUI then heartGUI:Destroy() end
+								end)
+							else
+								transitionToIdle("ClaimLostAtLastMoment")
 							end
+						else
+							-- Move Step
+							local dir = flatDir.Unit
+							local step = speed * TICK_RATE
+							nextXZ = currentPos + dir * step
+							
+							-- Rotation
+								local lookCF = CFrame.lookAt(currentPos, Vector3.new(foodPos.X, currentPos.Y, foodPos.Z))
+								logicRotation = lookCF.Rotation -- [v4.25b] Save only to logicRotation
+							
+							-- [v3.9] Update WorldPosition for accuracy
+							targetAtt.WorldPosition = foodPos
+						end
 						end
 					end
 				end
-			end
-			
-			if isJumping then
-				-- Apply Gravity
-				vVel = vVel - (gravity * TICK_RATE)
-				finalY = currentPos.Y + (vVel * TICK_RATE)
+			elseif state == "Eating" then
+				idleTimer += TICK_RATE 
 				
-				-- LANDING CHECK
-				if vVel < 0 and finalY <= groundHeight then
-					isJumping = false
-					vVel = 0
-					finalY = groundHeight
+				-- [v4.8] Continuous Lock Check
+				-- [v4.23n] Ignore if already destroyed (Self-Cleanup Phase)
+				if targetFood and targetFood.Parent and FoodClaims[targetFood] ~= catId then
+					print(string.format("[AI] %s ABORT EATING. Lock stolen by %s", shortId, tostring(FoodClaims[targetFood])))
+					transitionToIdle("LockStolenWhileEating")
+					return 
 				end
-			end
+				
+				-- [v4.23z] Reverted to 5s (Middle ground)
+				if idleTimer >= 5.0 and targetFood and targetFood.Parent and FoodClaims[targetFood] == catId then
+					print(string.format("[AI] %s DESTROYING FOOD: %s (%s)", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+					targetFood:Destroy()
+					FoodClaims[targetFood] = nil -- Clean memory
+				end
+				
+
+				
+				if idleTimer >= 5.5 then
+					state = "Idle"
+					idleTimer = 0
+					idleDuration = 5
+					if targetFood then FoodClaims[targetFood] = nil end
+					targetFood = nil
+				end
+
+			end -- Close State Machine (Idle/Moving/Eating)
 			
-			-- Save Physics State
-			model:SetAttribute("VerticalVelocity", vVel)
-			model:SetAttribute("IsJumping", isJumping)
 			
-			-- Apply CFrame
-			-- We reuse the Rotation from state logic (or keep existing if idle)
-			local currentRot = torso.CFrame.Rotation
-			torso.CFrame = CFrame.new(nextXZ.X, finalY, nextXZ.Z) * currentRot -- Preserve rotation
+			-- [v4.23i] REMOVED DUPLICATE PHYSICS BLOCK
+
+			
+			
+			
+			
+			
+			
 			
 			-- 3. Animation (Visuals)
 			-- Reuse t logic
 			local t = tick() * 15
-			local isMoving = (state == "Moving")
+			local isMoving = (state == "Moving" or state == "MovingToFood")
+			local isEating = (state == "Eating")
 			
-			-- Head
-			head.CFrame = torso.CFrame * CFrame.new(0, 0.7, -0.8)
+			-- [Added] Torso Override for Eating Motion
+			if isEating then
+				local eatCycle = math.sin(t * 0.6) -- Slow rhythmic cycle
+				-- [v2.4] Translation BEFORE Rotation to ensure strictly vertical lowering
+				torso.CFrame = torso.CFrame * CFrame.new(0, -0.15 * (eatCycle + 1), 0)
+				torso.CFrame = torso.CFrame * CFrame.Angles(math.rad(-10 * (eatCycle + 1)), 0, 0)
+			end
 			
-			-- 꼬리 애니메이션
-			local tailAngle = 45 + math.sin(t)*15
-			local tailOffset = Vector3.new(0, 0.5, 1.0)
-			local tailLength = 1.2
-			tail.CFrame = torso.CFrame * CFrame.new(tailOffset) * CFrame.Angles(math.rad(tailAngle), 0, 0) * CFrame.new(0, 0, tailLength/2)
-			
+			-- [v4.24b] Leg Animation (Restored)
 			if isMoving then
-				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t))*0.2, -0.8 + math.sin(t)*0.3)
-				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t+3))*0.2, -0.8 + math.sin(t+3)*0.3)
-				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1 + math.abs(math.sin(t+3))*0.2, 0.8 + math.sin(t+3)*0.3)
-				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1 + math.abs(math.sin(t))*0.2, 0.8 + math.sin(t)*0.3)
+				local angle = math.rad(20) * math.sin(t)
+				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, -0.8) * CFrame.Angles(angle, 0, 0)
+				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1, -0.8) * CFrame.Angles(-angle, 0, 0)
+				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, 0.8) * CFrame.Angles(-angle, 0, 0)
+				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1, 0.8) * CFrame.Angles(angle, 0, 0)
 			else
 				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, -0.8)
 				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1, -0.8)
@@ -1981,9 +2260,26 @@ function MapGenerator.SpawnCat(locationCF, parent)
 				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1, 0.8)
 			end
 			
-			task.wait(TICK_RATE)
+			-- Head
+			if isEating then
+				local chewBob = math.sin(t * 1.5) * 0.15 -- Faster chewing bob
+				-- Tilt forward (Negative X)
+				head.CFrame = torso.CFrame * CFrame.new(0, 0.7 + chewBob, -0.8) * CFrame.Angles(math.rad(-15 - chewBob * 5), 0, 0)
+			else
+				head.CFrame = torso.CFrame * CFrame.new(0, 0.7, -0.8)
+			end
+			
+			-- 꼬리 애니메이션
+			local tailAngle = 45 + math.sin(t)*15
+			local tailOffset = Vector3.new(0, 0.5, 1.0)
+			local tailLength = 1.2
+			tail.CFrame = torso.CFrame * CFrame.new(tailOffset) * CFrame.Angles(math.rad(tailAngle), 0, 0) * CFrame.new(0, 0, tailLength/2)
+			
+			
 		end
-	end)
+			
+		end
+	)
 end
 
 return MapGenerator

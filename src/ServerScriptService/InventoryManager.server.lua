@@ -130,6 +130,12 @@ local function setupWorldItem(itemPart, itemId, clickDetector)
 	if not clickDetector then return end
 	
 	clickDetector.MouseClick:Connect(function(player)
+		-- [v4.3] Block pickup if being eaten by a cat
+		if itemPart:GetAttribute("EatingBy") then
+			warn("[InventoryManager] Item is being eaten and cannot be picked up.")
+			return 
+		end
+		
 		if addItem(player, itemId, 1) then
 			-- 아이템 제거
 			itemPart:Destroy()
@@ -198,6 +204,13 @@ if not placeEvent then
 end
 
 placeEvent.OnServerEvent:Connect(function(player, slotIndex, position)
+	-- [v4.23q] Server-Side Debounce/Cooldown
+	if player:GetAttribute("PlaceCooldown") then return end
+	player:SetAttribute("PlaceCooldown", true)
+	task.delay(0.5, function() 
+		if player then player:SetAttribute("PlaceCooldown", nil) end 
+	end)
+
 	local inv = PlayerInventories[player]
 	if not inv or not inv[slotIndex] then return end
 	

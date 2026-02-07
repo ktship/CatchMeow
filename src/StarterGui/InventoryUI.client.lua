@@ -1,7 +1,7 @@
 -- InventoryUI.client.lua
 -- 인벤토리 UI (별도 창 + 토글 버튼 + 아이템 사용 모드)
 -- StarterGui에 위치
-
+-- [v4.23s] Preview Debug Mode (Green)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -15,13 +15,14 @@ local events = ReplicatedStorage:WaitForChild("Events")
 local updateEvent = events:WaitForChild("UpdateInventory")
 local useEvent = events:WaitForChild("UseItem")
 
--- PlaceItem 이벤트 (없으면 생성)
 local placeEvent = events:FindFirstChild("PlaceItem")
 if not placeEvent then
 	placeEvent = Instance.new("RemoteEvent")
 	placeEvent.Name = "PlaceItem"
 	placeEvent.Parent = events
 end
+
+local requestUpdateEvent = events:WaitForChild("RequestInventoryUpdate")
 
 local inventory = {} -- 로컬 캐시
 local isUseMode = false -- 아이템 사용 모드
@@ -214,8 +215,15 @@ local function createPreviewModel(itemId)
 			highlight.Parent = model
 			
 			previewModel = model
+			print("[InventoryUI] Created Preview Model: " .. tostring(previewModel))
 			
-			-- 초기 프리뷰 회전 설정 (눕히기)
+			-- [v4.23s] Visual Debug: Preview is GREEN
+			local highlight = Instance.new("Highlight")
+			highlight.FillTransparency = 0.5
+			highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green
+			highlight.OutlineTransparency = 0
+			highlight.OutlineColor = Color3.fromRGB(0, 255, 100)
+			highlight.Parent = model
 			local handle = model.PrimaryPart
 			if handle then
 				-- 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
@@ -256,8 +264,11 @@ end
 -- 프리뷰 제거 함수
 local function destroyPreviewModel()
 	if previewModel then
+		print("[InventoryUI] Destroying Preview Model: " .. tostring(previewModel))
 		previewModel:Destroy()
 		previewModel = nil
+	else
+		print("[InventoryUI] destroyPreviewModel called but no model.")
 	end
 end
 
@@ -265,7 +276,8 @@ end
 local function getValidGroundRaycast(origin, direction)
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = {previewModel, player.Character} -- 플레이어와 프리뷰 제외
+	local catsFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Cats")
+	rayParams.FilterDescendantsInstances = {previewModel, player.Character, catsFolder} -- 플레이어, 프리뷰, 고양이 폴더 제외
 	
 	local currentOrigin = origin
 	local currentDirection = direction
@@ -618,5 +630,9 @@ updateEvent.OnClientEvent:Connect(function(newInventory)
 	inventory = newInventory
 	refreshUI()
 end)
+
+-- [Added] Request initial data immediately on load to prevent race conditions
+print("[InventoryUI] Requesting initial inventory...")
+requestUpdateEvent:FireServer()
 
 print("[InventoryUI] Initialized")

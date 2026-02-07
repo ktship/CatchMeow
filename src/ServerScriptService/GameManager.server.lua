@@ -4,13 +4,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local Config = require(ReplicatedStorage:WaitForChild("Config"))
-local MapGenerator = require(game.ServerScriptService:WaitForChild("MapGenerator"))
 
--- [Fix] Prevent "Teleport Glitch" (Spawning at 0,0,0 then jumping to spawn)
--- Disable AutoLoad so we can manually spawn players ONLY after map is ready.
-Players.CharacterAutoLoads = false
-
+-- [v4.13] INIT CRITICAL EVENTS FIRST (Prevent Infinite Yields)
 -- 상태 값 (클라이언트 표시용)
 local statusValue = ReplicatedStorage:FindFirstChild("GameStatus")
 if not statusValue then
@@ -49,6 +44,13 @@ if not photoFeedbackEvent then
 	photoFeedbackEvent.Name = "PhotoFeedback"
 	photoFeedbackEvent.Parent = eventsFolder
 end
+
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local MapGenerator = require(game.ServerScriptService:WaitForChild("MapGenerator"))
+
+-- [Fix] Prevent "Teleport Glitch" (Spawning at 0,0,0 then jumping to spawn)
+-- Disable AutoLoad so we can manually spawn players ONLY after map is ready.
+Players.CharacterAutoLoads = false
 
 -- Helper 함수
 local function setStatus(msg)

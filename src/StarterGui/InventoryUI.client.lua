@@ -197,7 +197,7 @@ local function createPreviewModel(itemId)
 				model.PrimaryPart = newHandle
 				
 				-- 크기 확대 (2.5배)
-				local scale = 2.5
+				local scale = 3
 				newHandle.Size = newHandle.Size * scale
 				local mesh = newHandle:FindFirstChildOfClass("SpecialMesh")
 				if mesh then
@@ -241,6 +241,44 @@ local function createPreviewModel(itemId)
 			part.Parent = workspace
 			previewModel = part
 		end
+	elseif itemId == "CatTrap" then
+		-- CatTrap Visual (Real Model)
+		local source = workspace:FindFirstChild("CatTrap")
+		local part = nil
+		
+		if source then
+			part = source:Clone()
+			part.Name = "ItemPreview"
+			-- 3D Preview: Reset position to 0,0,0
+			-- [Fix] 회전 (X축 90도)
+			if part:IsA("Model") then
+				part:PivotTo(CFrame.new(0,0,0) * CFrame.Angles(math.rad(90), 0, 0))
+			else
+				part.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(90), 0, 0)
+				part.Anchored = true
+				part.CanCollide = false
+			end
+		else
+			-- Fallback
+			part = Instance.new("Part")
+			part.Name = "ItemPreview"
+			part.Size = Vector3.new(2, 2, 2)
+			part.Color = Color3.fromRGB(139, 69, 19) -- SaddleBrown
+			part.Material = Enum.Material.Wood
+			part.Anchored = true
+			part.CanCollide = false
+		end
+		
+		part.Parent = workspace
+		
+		local highlight = Instance.new("Highlight")
+		highlight.FillTransparency = 0.5
+		highlight.FillColor = Color3.fromRGB(0, 255, 0)
+		highlight.OutlineTransparency = 0
+		highlight.OutlineColor = Color3.fromRGB(0, 255, 100)
+		highlight.Parent = part
+		
+		previewModel = part
 	else
 		local part = Instance.new("Part")
 		part.Name = "ItemPreview"
@@ -319,26 +357,40 @@ RunService.RenderStepped:Connect(function()
 	if isUseMode and previewModel then
 		-- 마우스가 가리키는 방향으로 레이캐스트
 		local mouseRay = mouse.UnitRay
+		-- getValidGroundRaycast 함수 필요 (파일 상단에 이미 정의되어 있다고 가정)
 		local result = getValidGroundRaycast(mouseRay.Origin, mouseRay.Direction * 1000)
 		
 		if result then
-			local targetPos = result.Position + Vector3.new(0, -0.4, 0) -- -0.35에서 약간 더 내려서 공중에 뜨는 느낌 해결
+			local targetPos = result.Position + Vector3.new(0, 0, 0) -- 바닥 보정
+			
+			-- 아이템별 회전값 분기
+			local rotation = CFrame.Angles(0, 0, 0)
+			
+			-- 현재 선택된 아이템 ID 찾기
+			local currentItemId = nil
+			if selectedSlot and inventory[selectedSlot] then
+				currentItemId = inventory[selectedSlot].ItemId
+			end
+			
+			if currentItemId == "Bungeoppang" then
+				-- 붕어빵 전용 회전
+				rotation = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
+			elseif currentItemId == "CatTrap" then
+				-- [Fix] CatTrap은 바닥에 평평하게 (사용자 요청: Y축 90도)
+				rotation = CFrame.Angles(0, math.rad(90), 0)
+			else
+				-- 기타 아이템 (기본 평평 + Y축 회전값 없음)
+				rotation = CFrame.Angles(0, 0, 0)
+			end
 			
 			-- Model이든 Part이든 PivotTo 사용
 			if previewModel:IsA("Model") then
-				-- 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
-				previewModel:PivotTo(CFrame.new(targetPos) * CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472)))
-				
-				-- 디버그: 1초에 한 번만 출력 (너무 자주 찍히면 느려짐)
-				if os.clock() % 1 < 0.05 then
-					local angle = previewModel.PrimaryPart and previewModel.PrimaryPart.Orientation or Vector3.zero
-					print(string.format("[InventoryUI] Preview Rot: %.1f, %.1f, %.1f", angle.X, angle.Y, angle.Z))
-				end
-			elseif previewModel:IsA("BasePart") then
-				previewModel.Position = targetPos
+				previewModel:PivotTo(CFrame.new(targetPos) * rotation)
+			else
+				previewModel.CFrame = CFrame.new(targetPos) * rotation
 			end
 			
-			-- 투명도 설정 함수
+			-- 투명도 설정 함수 (보임)
 			local function setTransparency(obj, t)
 				if obj:IsA("BasePart") then
 					obj.Transparency = t
@@ -349,8 +401,8 @@ RunService.RenderStepped:Connect(function()
 					end
 				end
 			end
+			setTransparency(previewModel, 0)
 			
-			setTransparency(previewModel, 0) -- 보임
 		else
 			-- 허공이거나 유효한 지면이 없으면 안 보임
 			local function setTransparency(obj, t)
@@ -364,11 +416,12 @@ RunService.RenderStepped:Connect(function()
 				end
 			end
 			
-			setTransparency(previewModel, 1) -- 숨김
+			if previewModel then
+				setTransparency(previewModel, 1) -- 숨김
+			end
 		end
 	end
 end)
-
 
 -- 슬롯 생성 함수
 local function createSlot(index, itemId, count)
@@ -407,6 +460,9 @@ local function createSlot(index, itemId, count)
 	if itemId == "Bungeoppang" then
 		-- 붕어빵은 모델이 크므로 카메라를 조금 더 앞으로 당김 (6배 확대에 맞게 조정)
 		slotCamera.CFrame = CFrame.new(Vector3.new(0, 0, 4.0), Vector3.new(0, 0, 0)) 
+	elseif itemId == "CatTrap" then
+		-- CatTrap (Size 2x2x2) needs camera further back
+		slotCamera.CFrame = CFrame.new(Vector3.new(0, 1.5, 9.0), Vector3.new(0, 0, 0))
 	else
 		slotCamera.CFrame = CFrame.new(Vector3.new(0, 0, 1), Vector3.new(0, 0, 0)) -- 기본값
 	end
@@ -508,11 +564,54 @@ local function createSlot(index, itemId, count)
 			part.Color = Color3.fromRGB(255, 170, 80)
 			part.Parent = slotViewport
 		end
+	elseif itemId == "CatTrap" then
+		-- Try to clone from Workspace
+		local source = workspace:FindFirstChild("CatTrap")
+		if source then
+			local model = source:Clone()
+			
+			-- Center it
+			local targetCF = CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(45), 0)
+			if model:IsA("Model") then
+				model:PivotTo(targetCF)
+			else
+				model.CFrame = targetCF
+				model.Anchored = true
+			end
+			model.Parent = slotViewport
+		else
+			-- Fallback Box
+			local part = Instance.new("Part")
+			part.Size = Vector3.new(2, 2, 2)
+			part.Color = Color3.fromRGB(139, 69, 19) -- SaddleBrown
+			part.Material = Enum.Material.Wood
+			part.CFrame = CFrame.Angles(0, math.rad(45), 0)
+			part.Parent = slotViewport
+		end
 	else
 		local part = Instance.new("Part")
 		part.Size = Vector3.new(1.5, 1.5, 1.5) -- 3배 확대
 		part.Color = Color3.fromRGB(150, 150, 150)
 		part.Parent = slotViewport
+	end
+	
+	-- [New] ThumbnailCamera Support
+	local model = slotViewport:FindFirstChildWhichIsA("Model") or slotViewport:FindFirstChildWhichIsA("BasePart")
+	if model and model ~= slotCamera then
+		local thumbCam = model:FindFirstChild("ThumbnailCamera") 
+			or model:FindFirstChild("Camera") 
+			or model:FindFirstChild("ThumbnailConfiguration")
+			
+		if thumbCam then
+			if thumbCam:IsA("Camera") then
+				slotCamera.CFrame = thumbCam.CFrame
+			elseif thumbCam:IsA("Configuration") then
+				local actualCam = thumbCam:FindFirstChildWhichIsA("Camera")
+				if actualCam then
+					slotCamera.CFrame = actualCam.CFrame
+				end
+			end
+		end
 	end
 	
 	-- 수량

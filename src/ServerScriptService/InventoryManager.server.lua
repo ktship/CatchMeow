@@ -92,6 +92,27 @@ local function useItem(player, slotIndex)
 	elseif itemDef.Effect == "LureCat" then
 		-- TODO: 고양이 유인 효과
 		print(player.Name .. " used " .. itemDef.Name .. " - Lure Cat!")
+	elseif itemDef.Effect == "SummonTrap" then
+		-- CatTrap 소환 효과 (기존 CatTrapTool 로직 이식)
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local trapModel = game.Workspace:FindFirstChild("CatTrap")
+		
+		if hrp and trapModel then
+			-- 플레이어 앞 5스터드, 높이는 플레이어 발 밑
+			local spawnPos = hrp.CFrame * CFrame.new(0, 0, -5)
+			local targetCFrame = CFrame.new(spawnPos.Position.X, hrp.Position.Y - 2.5, spawnPos.Position.Z)
+			-- 회전은 플레이어를 바라보게 보정
+			targetCFrame = targetCFrame * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+			
+			trapModel:PivotTo(targetCFrame)
+			
+			-- 효과음이나 파티클 등을 추가하면 더 좋음
+			print(player.Name .. " summoned CatTrap!")
+		else
+			warn("Cannot summon trap. Character or TrapModel missing.")
+			return -- 아이템 소모 방지
+		end
 	else
 		print(player.Name .. " used " .. itemDef.Name)
 	end
@@ -148,8 +169,9 @@ end
 Players.PlayerAdded:Connect(function(player)
 	PlayerInventories[player] = {}
 	
-	-- 기본 아이템 지급: 붕어빵 1개
+	-- 기본 아이템 지급: 붕어빵 1개 + 덫 1개
 	addItem(player, "Bungeoppang", 1)
+	addItem(player, "CatTrap", 1)
 	
 	-- 클라이언트에 인벤토리 전송
 	updateEvent:FireClient(player, PlayerInventories[player])
@@ -163,6 +185,7 @@ end)
 for _, player in ipairs(Players:GetPlayers()) do
 	PlayerInventories[player] = {}
 	addItem(player, "Bungeoppang", 1)
+	addItem(player, "CatTrap", 1)
 	updateEvent:FireClient(player, PlayerInventories[player])
 end
 
@@ -218,6 +241,46 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position)
 	local itemId = slot.ItemId
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then return end
+	
+	-- [New Logic] CatTrap: Teleport existing trap instead of spawning new item
+	if itemId == "CatTrap" then
+		print("Placing CatTrap at " .. tostring(position))
+		-- Reuse the logic from useItem or similar
+		local trapModel = game.Workspace:FindFirstChild("CatTrap")
+		if trapModel then
+			-- Calculate rotation to face player
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local rotation = CFrame.Angles(0, 0, 0)
+			if hrp then
+				-- Trap faces the player
+				local lookAt = CFrame.lookAt(position, Vector3.new(hrp.Position.X, position.Y, hrp.Position.Z))
+				local rx, ry, rz = lookAt:ToOrientation()
+				rotation = CFrame.Angles(0, ry, 0)
+			end
+			
+			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 2, 0)) -- Lift slightly (Y=4 setting was mentioned earlier, but grounded is better)
+			
+			-- [Fix] Enable Interaction (E key) - 사용자가 비활성화 요청 (470)
+			-- local prompt = trapModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+			-- if prompt then 
+			-- 	prompt.Enabled = true 
+			-- end
+			
+			-- [New] Auto-Set Trap (자동 설치 상태 전환)
+			trapModel:SetAttribute("TargetState", "Setting")
+		else
+			warn("CatTrap model not found in Workspace")
+		end
+		
+		-- Remove from inventory
+		slot.Count = slot.Count - 1
+		if slot.Count <= 0 then
+			table.remove(inv, slotIndex)
+		end
+		updateEvent:FireClient(player, inv)
+		return -- Skip standard WorldItem spawning
+	end
 	
 	-- 거리 체크 (너무 멀리 배치 방지)
 	local char = player.Character

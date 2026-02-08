@@ -175,7 +175,8 @@ RunService.Heartbeat:Connect(function(dt)
 			for _, part in ipairs(parts) do
 				local model = part:FindFirstAncestorOfClass("Model")
 				if model then
-					if model.Name == "Cat" or model.Name == "TrafficCar" then
+					-- [Fixed] Check if name STARTS with "Cat" (cats have unique IDs like "Cat_A1B2C3")
+					if string.sub(model.Name, 1, 3) == "Cat" or model.Name == "TrafficCar" then
 						isBlocked = true
 						-- print("Obstacle Detected: " .. model.Name)
 						break -- Stop checking if caught

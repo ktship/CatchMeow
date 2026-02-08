@@ -41,6 +41,15 @@ ItemData.Items = {
 		Price = 10,
 		Effect = "Heal",
 	},
+	CatTrap = {
+		Id = "CatTrap",
+		Name = "고양이 덫",
+		Icon = "📦", -- 박스 아이콘
+		Description = "고양이를 잡을 수 있는 덫. 사용하면 설치된다.",
+		MaxStack = 1,
+		Price = 100,
+		Effect = "SummonTrap",
+	},
 }
 
 function ItemData.GetItem(itemId)

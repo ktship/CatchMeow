@@ -2,7 +2,7 @@
 -- ServerScriptService에 위치해야 합니다.
 print("[MapGenerator] SCRIPT START - Reading file...")
 -- 게임 시작 시 도시 맵을 생성합니다.
-print("[MapGenerator] Loaded v4.25c (Target Beam Restored)")
+print("[MapGenerator] Loaded v4.27d (Faster Search + Steady FOV)")
 
 local HttpService = game:GetService("HttpService")
 
@@ -460,7 +460,7 @@ function MapGenerator.GenerateProcedural()
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		-- 지형 높이 계산하여 정확한 위치에 스폰
 		local groundY = getHeight(cx, cz) 
-		local catCF = CFrame.new(cx, groundY + 1, cz)
+		local catCF = CFrame.new(cx, groundY + 1, cz) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 		MapGenerator.SpawnCat(catCF, catsFolder)
 	end
 	
@@ -612,7 +612,7 @@ function MapGenerator.LoadMapFromData(mapData)
 		-- For simplicity, keeping it at 100 -> 110.
 		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
 		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
-		local catCF = CFrame.new(cx, 1, cz)
+		local catCF = CFrame.new(cx, 1, cz) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 		MapGenerator.SpawnCat(catCF, catsFolder)
 	end
 end
@@ -1693,7 +1693,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	local catId = HttpService:GenerateGUID(false)
 	local shortId = string.sub(catId, 1, 4)
 	-- [DEBUG] Verify Memory Table Sharing
-	print(string.format("[AI] %s Spawned. FoodClaims Table: %s", shortId, tostring(FoodClaims)))
+	-- print(string.format("[AI] %s Spawned. FoodClaims Table: %s", shortId, tostring(FoodClaims)))
 	
 	local model = Instance.new("Model")
 	model.Name = "Cat_" .. shortId
@@ -1822,7 +1822,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 
 	-- AI Loop (Non-blocking Physics + State Machine)
 	task.spawn(function()
-		print(string.format("[AI] %s THREAD START", shortId))
+		-- print(string.format("[AI] %s THREAD START", shortId))
 		local speed = 8 -- studs/sec
 		local state = "Idle" -- Idle, Moving, MovingToFood, Eating
 		local targetPos = nil
@@ -1855,6 +1855,32 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		targetBeam.LightEmission = 1
 		targetBeam.Enabled = false
 		targetBeam.Parent = head
+
+		-- [v4.26f] FOV Visualization - Stable Source on Torso
+		local attFOVSource = Instance.new("Attachment")
+		attFOVSource.Name = "AttFOVSource"
+		attFOVSource.Position = Vector3.new(0, 0.7, -0.8) -- Eye level
+		attFOVSource.Parent = torso
+
+		-- [v4.26l] Create Smooth Sector FOV Surface (8 segments for smooth arc)
+		local fovSurfaces = {}
+		for i = 1, 8 do
+			local b = Instance.new("Beam")
+			b.Name = "FOVSector_" .. i
+			b.Attachment0 = attFOVSource
+			local att = Instance.new("Attachment")
+			att.Name = "AttSectorTarget_" .. i
+			att.Parent = workspace.Terrain
+			b.Attachment1 = att
+			b.Width0 = 0
+			b.Width1 = 4.0 -- Recalculated for 11.25deg slices at 20 studs
+			b.Transparency = NumberSequence.new(0.8)
+			b.Color = ColorSequence.new(Color3.fromRGB(0, 255, 255))
+			b.FaceCamera = false
+			b.Enabled = false -- [v4.27a] Disabled by default
+			b.Parent = torso
+			table.insert(fovSurfaces, {att = att, beam = b})
+		end
 		
 		-- [v3.9/v4.0/v4.2/v4.3] Centralized State Reset & Visual Cleanup
 		local function transitionToIdle(reason)
@@ -1889,6 +1915,9 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		
 		-- Food Search Timer
 		local searchTimer = math.random() * 0.5 
+		
+		-- [v4.27b] FOV Pulse Timer
+		local fovPulseTimer = 0
 		
 		-- Raycast Params
 		local rayParams = RaycastParams.new()
@@ -2002,13 +2031,13 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			
 			-- 1. State Logic
 			if state == "Idle" then
-				-- Search for food every 0.5 seconds
-				if searchTimer >= 0.5 and searchCooldown <= 0 then
+				-- Search for food every 0.25 seconds
+				if searchTimer >= 0.25 and searchCooldown <= 0 then
 					searchTimer = 0
 					local worldItems = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WorldItems")
 					if worldItems then
 						local closestFood = nil
-						local minDist = 50
+						local minDist = 20 -- [v4.26c] Range reduced from 50 to 20
 						
 						for _, item in ipairs(worldItems:GetChildren()) do
 							-- [v4.23o] Assign Unique ID for Debugging
@@ -2026,8 +2055,8 @@ function MapGenerator.SpawnCat(locationCF, parent)
 									local dirToFood = (pos - torso.Position).Unit
 									local dot = torso.CFrame.LookVector:Dot(dirToFood)
 									
-									-- [v3.2] Use 120-degree cone (Dot product > 0.5)
-									if dot > 0.5 then
+									-- [v4.26d] Use 90-degree cone (Dot product > 0.707)
+									if dot > 0.707 then
 										local dist = (torso.Position - pos).Magnitude
 										if dist < minDist then
 											minDist = dist
@@ -2232,7 +2261,53 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			
 			
 			
-			-- 3. Animation (Visuals)
+			-- [v4.26m] Update FOV Visualization (Eye Level Radar)
+			local fovDist = 20
+			local rawHeading = logicRotation * Vector3.new(0,0,-1)
+			local baseHeading = Vector3.new(rawHeading.X, 0, rawHeading.Z).Unit 
+			
+			local eyeY = cleanPos.Y + 0.7 -- [v4.26m] Raised to eye level
+			local eyeBase = Vector3.new(cleanPos.X, eyeY, cleanPos.Z)
+			
+			-- [v4.26i] Change up vector to (1, 0, 0) as requested
+			local lookCF = CFrame.lookAt(eyeBase, eyeBase + baseHeading, Vector3.new(1, 0, 0))
+			
+			-- Force root attachment orientation
+			attFOVSource.WorldCFrame = lookCF
+
+			-- [v4.27d] FOV Visibility Logic (Steady, not pulsing)
+			-- Conditions: food within 30 studs AND cat is not eating
+			local foodNearby = false
+			local worldItems = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WorldItems")
+			if worldItems then
+				for _, item in ipairs(worldItems:GetChildren()) do
+					if item:GetAttribute("IsFood") then
+						local foodPos = getItemPos(item)
+						if foodPos and (foodPos - cleanPos).Magnitude <= 30 then
+							foodNearby = true
+							break
+						end
+					end
+				end
+			end
+			
+			local showFOV = foodNearby and state ~= "Eating"
+
+			-- [v4.26l] Update 8-segment Sector Surface (Smooth Arc)
+			-- Scale: 90 degrees total / 8 segments = 11.25 degrees per segment
+			-- Centers: -39.375, -28.125, -16.875, -5.625, 5.625, 16.875, 28.125, 39.375
+			for i = 1, 8 do
+				local segment = fovSurfaces[i]
+				segment.beam.Enabled = showFOV
+				
+				if showFOV then
+					local angle = -45 + (11.25 * (i - 0.5))
+					local dir = CFrame.Angles(0, math.rad(-angle), 0) * baseHeading
+					local targetPos = eyeBase + (dir * fovDist)
+					segment.att.WorldCFrame = CFrame.lookAt(targetPos, targetPos + baseHeading, Vector3.new(1,0,0))
+				end
+			end
+
 			-- Reuse t logic
 			local t = tick() * 15
 			local isMoving = (state == "Moving" or state == "MovingToFood")

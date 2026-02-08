@@ -12,7 +12,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Config"))
 -- 모듈 로드 대기
 
 local function giveWeapon(player)
-	-- Give both Camera and Camera2
+	-- Give both Camera and Camera2 (Synced)
 	local weaponNames = {"Camera", "Camera2"}
 	
 	-- 비동기로 무기 지급 시도

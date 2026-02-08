@@ -186,23 +186,39 @@ local function createPreviewModel(itemId)
 			local model = Instance.new("Model")
 			model.Name = "ItemPreview"
 			
-			-- Accessory 내부의 Handle과 그 자식들을 복사해서 새 모델에 넣음
-			local handle = sourceItem:FindFirstChild("Handle")
-			if handle then
-				local newHandle = handle:Clone()
-				newHandle.Name = "Handle"
-				newHandle.Anchored = true
-				newHandle.CanCollide = false
-				newHandle.Parent = model
-				model.PrimaryPart = newHandle
+			-- [v4.25c] Support both Part and Accessory/Model
+			local cloned = sourceItem:Clone()
+			local targetHandle = nil
+			
+			if cloned:IsA("BasePart") then
+				targetHandle = cloned
+			elseif cloned:IsA("Accessory") then
+				targetHandle = cloned:FindFirstChild("Handle")
+			elseif cloned:IsA("Model") then
+				targetHandle = cloned.PrimaryPart or cloned:FindFirstChildWhichIsA("BasePart")
+			end
+
+			if targetHandle then
+				targetHandle.Name = "Handle"
+				targetHandle.Anchored = true
+				targetHandle.CanCollide = false
+				targetHandle.Parent = model
+				model.PrimaryPart = targetHandle
 				
-				-- 크기 확대 (2.5배)
+				-- 크기 확대 (3배) - 붕어빵을 좀 더 잘 보이게
 				local scale = 3
-				newHandle.Size = newHandle.Size * scale
-				local mesh = newHandle:FindFirstChildOfClass("SpecialMesh")
+				if targetHandle:IsA("BasePart") then
+					targetHandle.Size = targetHandle.Size * scale
+				end
+				local mesh = targetHandle:FindFirstChildOfClass("SpecialMesh")
 				if mesh then
 					mesh.Scale = mesh.Scale * scale
 				end
+				
+				-- 불필요한 원본 제거
+				if cloned ~= targetHandle then cloned:Destroy() end
+			else
+				cloned:Destroy()
 			end
 			
 			model.Parent = workspace
@@ -252,9 +268,28 @@ local function createPreviewModel(itemId)
 			-- 3D Preview: Reset position to 0,0,0
 			-- [Fix] 회전 (X축 90도)
 			if part:IsA("Model") then
-				part:PivotTo(CFrame.new(0,0,0) * CFrame.Angles(math.rad(90), 0, 0))
+				part:PivotTo(CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(90), 0))
+				
+				-- [New] Setting 상태(문 열림)로 보이게 하기
+				local partEnter = part:FindFirstChild("PartEnter")
+				if partEnter then
+					-- 로컬 좌표계 기준 위로 4 스터드 이동 (Setting 상태)
+					-- 모델이 회전되어 있으므로 CFrame.new(0, 4, 0)을 곱하면 월드 기준 위로 감
+					-- PartEnter가 모델의 일부이므로, 모델 Pivot 기준 상대 이동을 해야 함
+					-- 단순하게 PartEnter의 CFrame을 위로 올림
+					partEnter.CFrame = partEnter.CFrame * CFrame.new(0, 4, 0)
+					
+					-- 자식들도 같이 이동 (Weld가 없으므로 수동 이동)
+					for _, child in ipairs(partEnter:GetChildren()) do
+						if child:IsA("BasePart") then
+							-- 상대 위치 유지하면서 부모 따라가기 (약간 복잡할 수 있음)
+							-- 쉐이프가 단순하다면 그냥 부모 CFrame 복사해도 됨
+							child.CFrame = child.CFrame * CFrame.new(0, 4, 0)
+						end
+					end
+				end
 			else
-				part.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(90), 0, 0)
+				part.CFrame = CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(90), 0)
 				part.Anchored = true
 				part.CanCollide = false
 			end
@@ -513,13 +548,21 @@ local function createSlot(index, itemId, count)
 
 			if model:IsA("Model") then
 				print("[InventoryUI] Valid Bungeoppang Model found")
+				model.Name = "InventoryItem"
 				model:PivotTo(CFrame.new(0,0,0) * CFrame.Angles(math.rad(-20), math.rad(45), 0))
+				model.Parent = slotViewport
 			elseif model:IsA("Accessory") then
 				print("[InventoryUI] Valid Bungeoppang Accessory found")
 				local handle = model:FindFirstChild("Handle") or model:FindFirstChildWhichIsA("BasePart")
 				
 				if handle then
 					print("[InventoryUI] Handle found: " .. handle.Name)
+					
+					-- 액세서리에서 핸들만 추출 (Accessory 동작 방지)
+					handle.Name = "InventoryItem"
+					handle.Parent = slotViewport -- Viewport에 직접 넣음
+					model:Destroy() -- 껍데기 제거
+					model = handle -- 참조 변경
 					
 					-- 크기 초대형 확대 (6.0배)
 					local scale = 6.0
@@ -540,28 +583,44 @@ local function createSlot(index, itemId, count)
 						warn("[InventoryUI] Handle is transparent (".. handle.Transparency .."). Force setting to 0.")
 						handle.Transparency = 0
 					else
-						-- 명시적으로 0으로 설정
 						handle.Transparency = 0
 					end
 				else
 					warn("[InventoryUI] NO Handle found in Accessory! Creating fallback part.")
 					local p = Instance.new("Part")
-					p.Name = "FallbackHandle"
+					p.Name = "InventoryItem" -- 이름 표준화
 					p.Size = Vector3.new(1.5, 1.5, 1.5)
 					p.Color = Color3.fromRGB(255, 0, 0) -- Red for error
 					p.CFrame = CFrame.new(0,0,0)
-					p.Parent = model
+					p.Parent = slotViewport
+					if model then model:Destroy() end
 				end
 			else
-				warn("[InventoryUI] Bungeoppang is neither Model nor Accessory? Type: " .. model.ClassName)
-				model.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(-20), math.rad(45), 0)
+				-- Part (BasePart) 처리 - 이제 AssetLoader에서 Part로 변환됨
+				print("[InventoryUI] Valid Bungeoppang Part found")
+				model.Name = "InventoryItem"
+				
+				-- 크기 초대형 확대 (6.0배)
+				local scale = 6.0
+				model.Size = model.Size * scale
+				local mesh = model:FindFirstChildOfClass("SpecialMesh")
+				if mesh then
+					mesh.Scale = mesh.Scale * scale
+				end
+
+				-- 인벤토리에서는 눕혀진 윗면이 보이도록 설정 (사용자 요청 값 적용)
+				model.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(-120), math.rad(15), math.rad(15))
+				model.Anchored = true
+				model.Transparency = 0
+				model.Parent = slotViewport
 			end
-			model.Parent = slotViewport
 		else
 			-- Fallback
 			local part = Instance.new("Part")
+			part.Name = "InventoryItem"
 			part.Size = Vector3.new(1.5, 1.5, 1.5)
 			part.Color = Color3.fromRGB(255, 170, 80)
+			part.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(-120), math.rad(15), math.rad(15))
 			part.Parent = slotViewport
 		end
 	elseif itemId == "CatTrap" then
@@ -570,8 +629,8 @@ local function createSlot(index, itemId, count)
 		if source then
 			local model = source:Clone()
 			
-			-- Center it
-			local targetCF = CFrame.new(0,0,0) * CFrame.Angles(0, math.rad(45), 0)
+			-- Center it (사용자 요청 값 적용: 0, -140, 0)
+			local targetCF = CFrame.new(0,0,0) * CFrame.Angles(math.rad(0), math.rad(-140), math.rad(0))
 			if model:IsA("Model") then
 				model:PivotTo(targetCF)
 			else
@@ -585,7 +644,7 @@ local function createSlot(index, itemId, count)
 			part.Size = Vector3.new(2, 2, 2)
 			part.Color = Color3.fromRGB(139, 69, 19) -- SaddleBrown
 			part.Material = Enum.Material.Wood
-			part.CFrame = CFrame.Angles(0, math.rad(45), 0)
+			part.CFrame = CFrame.new(0,0,0) * CFrame.Angles(math.rad(0), math.rad(-140), math.rad(0))
 			part.Parent = slotViewport
 		end
 	else
@@ -700,8 +759,9 @@ mouse.Button1Down:Connect(function()
 	local result = getValidGroundRaycast(mouseRay.Origin, mouseRay.Direction * 1000)
 	
 	if result then
-		-- 서버에 아이템 배치 요청 (레이캐스트 결과 위치 사용)
-		placeEvent:FireServer(selectedSlot, result.Position)
+		-- 서버에 아이템 배치 요청 (레이캐스트 결과 위치 사용 + [New] 클릭된 대상 전달)
+		-- 덫에 미끼를 놓는 경우를 위해 클릭된 파트(result.Instance)도 함께 보냄
+		placeEvent:FireServer(selectedSlot, result.Position, result.Instance)
 		cancelUseMode()
 	end
 end)
@@ -720,6 +780,118 @@ closeBtn.MouseButton1Click:Connect(function()
 	isOpen = false
 	invWindow.Visible = false
 end)
+-- [Debug] 아이템 회전 조절 UI
+local function createDebugUI()
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "ItemRotationDebug"
+	screen.Parent = playerGui
+	
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0, 200, 0, 150)
+	frame.Position = UDim2.new(0.8, 0, 0.1, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	frame.BackgroundTransparency = 0.5
+	frame.Parent = screen
+	
+	local xVal, yVal, zVal = -90, 0, 0 -- 초기값 (기존 코드 기준)
+	
+	local function updateRotation()
+		local foundCount = 0
+		
+		-- [Debug] PlayerGui 전체를 뒤져서 모든 ViewportFrame의 아이템을 회전시킵니다.
+		local allDescendants = playerGui:GetDescendants()
+		for _, vp in ipairs(allDescendants) do
+			if vp:IsA("ViewportFrame") then
+				-- 카메라 제외한 실제 아이템(BasePart/Model) 찾기
+				local targetItem = nil
+				for _, child in ipairs(vp:GetChildren()) do
+					if (child:IsA("BasePart") or child:IsA("Model")) and not child:IsA("Camera") then
+						targetItem = child
+						break
+					end
+				end
+				
+				if targetItem then
+					foundCount = foundCount + 1
+					local cf = CFrame.new(0,0,0) * CFrame.Angles(math.rad(xVal), math.rad(yVal), math.rad(zVal))
+					if targetItem:IsA("Model") then
+						targetItem:PivotTo(cf)
+					elseif targetItem:IsA("BasePart") then
+						targetItem.CFrame = cf
+					end
+				end
+			end
+		end
+		
+		print(string.format("[Debug] Update Rotation: %.1f, %.1f, %.1f (Items Updated: %d)", xVal, yVal, zVal, foundCount))
+	end
+	
+	local function createControl(name, yPos, getter, setter)
+		local label = Instance.new("TextLabel")
+		label.Text = name
+		label.Size = UDim2.new(0.2, 0, 0, 30)
+		label.Position = UDim2.new(0, 5, 0, yPos)
+		label.TextColor3 = Color3.new(1,1,1)
+		label.BackgroundTransparency = 1
+		label.Parent = frame
+		
+		local minusBtn = Instance.new("TextButton")
+		minusBtn.Text = "-"
+		minusBtn.Size = UDim2.new(0, 30, 0, 30)
+		minusBtn.Position = UDim2.new(0.2, 5, 0, yPos)
+		minusBtn.Parent = frame
+		
+		local input = Instance.new("TextBox")
+		input.Text = tostring(getter())
+		input.Size = UDim2.new(0.3, -10, 0, 30)
+		input.Position = UDim2.new(0.4, 0, 0, yPos)
+		input.Parent = frame
+		
+		local plusBtn = Instance.new("TextButton")
+		plusBtn.Text = "+"
+		plusBtn.Size = UDim2.new(0, 30, 0, 30)
+		plusBtn.Position = UDim2.new(0.7, 5, 0, yPos)
+		plusBtn.Parent = frame
+		
+		local function update(val)
+			setter(val)
+			input.Text = tostring(val)
+			updateRotation()
+		end
+		
+		minusBtn.MouseButton1Click:Connect(function() update(getter() - 10) end)
+		plusBtn.MouseButton1Click:Connect(function() update(getter() + 10) end)
+		input.FocusLost:Connect(function()
+			local n = tonumber(input.Text)
+			if n then update(n) else input.Text = tostring(getter()) end
+		end)
+
+		return input
+	end
+	
+	local xInput = createControl("X", 10, function() return xVal end, function(v) xVal = v end)
+	local yInput = createControl("Y", 45, function() return yVal end, function(v) yVal = v end)
+	local zInput = createControl("Z", 80, function() return zVal end, function(v) zVal = v end)
+	
+	local resetBtn = Instance.new("TextButton")
+	resetBtn.Text = "RESET (-90,0,0)"
+	resetBtn.Size = UDim2.new(0.9, 0, 0, 30)
+	resetBtn.Position = UDim2.new(0.05, 0, 0, 115)
+	resetBtn.Parent = frame
+	resetBtn.MouseButton1Click:Connect(function()
+		xVal, yVal, zVal = -90, 0, 0
+		xInput.Text = "-90"; yInput.Text = "0"; zInput.Text = "0"
+		updateRotation()
+	end)
+	
+	updateRotation() -- 초기 적용
+	
+	-- [Fix] UI 갱신 시에도 회전값 적용되도록 글로벌 변수에 저장하여 접근
+	_G.DebugUpdateRotation = updateRotation
+end
+
+-- [Debug] 실행 (필요 시 주석 해제하여 사용)
+-- createDebugUI()
 
 updateEvent.OnClientEvent:Connect(function(newInventory)
 	print("[InventoryUI] Received inventory update. Item Count: " .. #newInventory)
@@ -728,6 +900,13 @@ updateEvent.OnClientEvent:Connect(function(newInventory)
 	end
 	inventory = newInventory
 	refreshUI()
+	
+	-- [Debug] UI 갱신 후 회전값 다시 적용 (약간의 딜레이 필요할 수 있음)
+	if _G.DebugUpdateRotation then
+		task.delay(0.1, function()
+			_G.DebugUpdateRotation()
+		end)
+	end
 end)
 
 -- [Added] Request initial data immediately on load to prevent race conditions

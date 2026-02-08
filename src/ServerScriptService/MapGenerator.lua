@@ -1586,30 +1586,22 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 			print("[MapGenerator] SpawnWorldItem Called. UUID: " .. HttpService:GenerateGUID(false))
 			local model = sourceItem:Clone()
 			
-			-- [v4.23z] Flatten Accessory to Model to prevent auto-wearing
-			local innerModel = Instance.new("Model")
-			innerModel.Name = "Inner_" .. itemId
-			
-			local handle = nil
-			if model:IsA("Accessory") then
-				handle = model:FindFirstChild("Handle")
-				if handle then handle.Parent = innerModel end
-				model:Destroy()
+			-- [v4.25b] Support both Part and Accessory/Model
+			local targetHandle = nil
+			if model:IsA("BasePart") then
+				targetHandle = model
+			elseif model:IsA("Accessory") then
+				targetHandle = model:FindFirstChild("Handle")
 			elseif model:IsA("Model") then
-				for _, c in ipairs(model:GetChildren()) do c.Parent = innerModel end
-				model:Destroy()
-			else
-				model.Parent = innerModel
-				if model:IsA("BasePart") then handle = model end
+				targetHandle = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
 			end
-			model = innerModel
-			
-			-- [v4.23z] Monolithic Setup for Flattened Model
-			local targetHandle = model:FindFirstChild("Handle") or model:FindFirstChildOfClass("BasePart")
+
 			if targetHandle then
 				-- [v4.25a] Restore 2.5x Scaling
 				local scaleCount = 2.5
-				targetHandle.Size = targetHandle.Size * scaleCount
+				if targetHandle:IsA("BasePart") then
+					targetHandle.Size = targetHandle.Size * scaleCount
+				end
 				local mesh = targetHandle:FindFirstChildOfClass("SpecialMesh")
 				if mesh then
 					mesh.Scale = mesh.Scale * scaleCount
@@ -1620,14 +1612,15 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 				targetHandle.CanCollide = false
 			end
 			
+			-- Model Wrapper (for Highlight and consistency)
 			local wrapperModel = Instance.new("Model")
 			wrapperModel.Name = "WorldItem_" .. itemId
 			wrapperModel.Parent = parent
 			model.Parent = wrapperModel
-			wrapperModel.PrimaryPart = targetHandle
+			if targetHandle then wrapperModel.PrimaryPart = targetHandle end
 			wrapperModel:SetAttribute("IsFood", true)
 			
-			part = targetHandle -- ClickDetector 부착 대상
+			part = targetHandle or (model:IsA("BasePart") and model) -- ClickDetector 부착 대상
 			print(string.format("[MapGenerator] Spawned Item. Sibling Count in WorldItems: %d", #parent:GetChildren()))
 		else
 			-- Fallback (Simple Part) if Asset not ready
@@ -1651,7 +1644,12 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 	end
 	
 	-- 아이템 ID 저장
-	part:SetAttribute("ItemId", itemId)
+	if part then
+		part:SetAttribute("ItemId", itemId)
+	else
+		warn("[MapGenerator] Failed to assign 'part' for itemId: " .. tostring(itemId))
+		return
+	end
 	
 	-- ClickDetector 추가 (마우스 호버 + 클릭으로 획득)
 	-- ClickDetector는 기본적으로 손 모양 커서를 표시함

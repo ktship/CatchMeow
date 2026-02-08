@@ -45,8 +45,27 @@ for _, info in ipairs(ASSETS_TO_LOAD) do
 		if success and modelContainer then
 			assetItem = modelContainer:GetChildren()[1]
 			if assetItem then
-				assetItem.Name = info.Name
-				assetItem.Parent = assetsFolder
+				-- [Fix] 만약 Accessory라면 Handle만 추출하여 Part/Model로 변환
+				if assetItem:IsA("Accessory") then
+					local handle = assetItem:FindFirstChild("Handle") or assetItem:FindFirstChildWhichIsA("BasePart")
+					if handle then
+						handle.Name = info.Name
+						handle.Parent = assetsFolder
+						-- 필요없는 속성 제거/초기화
+						handle.Anchored = true
+						handle.CanCollide = false
+						-- 기존 Accessory 삭제
+						assetItem:Destroy()
+						assetItem = handle -- 참조 업데이트
+					else
+						-- 핸들이 없으면 그냥 씀 (Fallback)
+						assetItem.Name = info.Name
+						assetItem.Parent = assetsFolder
+					end
+				else
+					assetItem.Name = info.Name
+					assetItem.Parent = assetsFolder
+				end
 			end
 			modelContainer:Destroy()
 		end

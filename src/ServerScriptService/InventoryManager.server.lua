@@ -226,7 +226,7 @@ if not placeEvent then
 	placeEvent.Parent = eventsFolder
 end
 
-placeEvent.OnServerEvent:Connect(function(player, slotIndex, position)
+placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstance)
 	-- [v4.23q] Server-Side Debounce/Cooldown
 	if player:GetAttribute("PlaceCooldown") then return end
 	player:SetAttribute("PlaceCooldown", true)
@@ -268,7 +268,9 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position)
 			-- end
 			
 			-- [New] Auto-Set Trap (자동 설치 상태 전환)
+			print("[InventoryManager] Setting Trap Attribute TargetState to 'Setting'")
 			trapModel:SetAttribute("TargetState", "Setting")
+			print("[InventoryManager] Current TargetState: " .. tostring(trapModel:GetAttribute("TargetState")))
 		else
 			warn("CatTrap model not found in Workspace")
 		end
@@ -282,6 +284,33 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position)
 		return -- Skip standard WorldItem spawning
 	end
 	
+	-- [New] Bait Placement (미끼 놓기)
+	-- 클릭된 대상이 CatTrap의 일부이고, 아이템이 'Bungeoppang' 또는 'CatTreat'인 경우
+	if hitInstance and (itemId == "Bungeoppang" or itemId == "CatTreat") then
+		local trapModel = hitInstance:FindFirstAncestor("CatTrap")
+		if trapModel then
+			-- Trap이 이미 무언가(고양이 등)를 잡고 있는지 확인하려면?
+			-- 일단 Setting 상태일 때만 미끼를 놓을 수 있게 제한
+			local currentState = trapModel:GetAttribute("TargetState")
+			if currentState == "Setting" then
+				print("[InventoryManager] Placing " .. itemId .. " as bait in CatTrap!")
+				
+				-- CatTrapHandler에 미끼 추가 요청 (속성 변경 등)
+				-- 하지만 CatTrapHandler는 ServerScriptService에 있으므로 직접 접근 불가
+				-- 대신 TrapModel에 Attribute를 설정하여 Handler가 감지하게 함
+				trapModel:SetAttribute("BaitItem", itemId)
+				
+				-- 인벤토리에서 제거
+				slot.Count = slot.Count - 1
+				if slot.Count <= 0 then
+					table.remove(inv, slotIndex)
+				end
+				updateEvent:FireClient(player, inv)
+				return
+			end
+		end
+	end
+
 	-- 거리 체크 (너무 멀리 배치 방지)
 	local char = player.Character
 	if char and char:FindFirstChild("HumanoidRootPart") then

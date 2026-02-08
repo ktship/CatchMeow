@@ -158,6 +158,75 @@ function CatTrapHandler:CreateDebugPrompt()
 	end)
 end
 
+-- [New] 미끼 시각화 추가
+function CatTrapHandler:AddBaitVisual(baitItemId)
+	print("[CatTrapHandler] 미끼 추가: " .. tostring(baitItemId))
+	
+	-- 기존 미끼 제거
+	if self.BaitModel then
+		self.BaitModel:Destroy()
+		self.BaitModel = nil
+	end
+	
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local sourceItem = assets and assets:FindFirstChild(baitItemId)
+	
+	local baitPart = nil
+	
+	if sourceItem then
+		-- Asset에서 복사
+		if sourceItem:IsA("Model") then
+			baitPart = sourceItem:Clone()
+		elseif sourceItem:IsA("Accessory") then
+			local handle = sourceItem:FindFirstChild("Handle")
+			if handle then
+				baitPart = handle:Clone()
+				baitPart:ClearAllChildren() -- 매쉬 등만 남김
+				-- SpecialMesh 스케일 조절 (선택)
+			end
+		end
+	end
+	
+	-- Asset이 없거나 실패하면 기본 파트 생성
+	if not baitPart then
+		baitPart = Instance.new("Part")
+		baitPart.Size = Vector3.new(1, 0.5, 1)
+		baitPart.Color = Color3.fromRGB(255, 170, 0) -- 주황색
+		baitPart.Material = Enum.Material.Food
+	end
+	
+	-- 위치 잡기 (Trap의 Pivot 기준 바닥 중앙)
+	local currentPivot = self.TrapModel:GetPivot()
+	-- 바닥에서 약간 위
+	local targetCFrame = currentPivot * CFrame.new(0, 0.5, 0) 
+	
+	if baitPart:IsA("Model") then
+		baitPart:PivotTo(targetCFrame)
+	else
+		baitPart.CFrame = targetCFrame
+		baitPart.Anchored = false -- 용접할 것이므로 false
+		baitPart.CanCollide = false
+	end
+	
+	baitPart.Name = "Bait_" .. baitItemId
+	baitPart.Parent = self.TrapModel
+	
+	-- 용접 (설치된 덫에 고정)
+	local weldPivot = self.TrapModel.PrimaryPart or self.PartEnter -- PrimaryPart가 없으면 PartEnter에라도..
+	if weldPivot then
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = weldPivot
+		weld.Part1 = (baitPart:IsA("Model") and baitPart.PrimaryPart) or baitPart
+		weld.Parent = baitPart
+	else
+		baitPart.Anchored = true -- 용접 대상 없으면 그냥 앵커
+	end
+	
+	self.BaitModel = baitPart
+end
+
+
 -- 실행
 task.spawn(function()
 	-- print("[CatTrapHandler] 스크립트 시작됨. CatTrap 찾는 중...")
@@ -168,7 +237,18 @@ task.spawn(function()
 		CatTrapHandler.TrapModel:GetAttributeChangedSignal("TargetState"):Connect(function()
 			local targetState = CatTrapHandler.TrapModel:GetAttribute("TargetState")
 			if targetState and States[string.upper(targetState)] then
+				print("[CatTrapHandler] Attribute Changed: TargetState -> " .. targetState)
 				CatTrapHandler:SetState(targetState)
+			else
+				warn("[CatTrapHandler] Invalid TargetState: " .. tostring(targetState))
+			end
+		end)
+		
+		-- [New] 미끼 추가 감지
+		CatTrapHandler.TrapModel:GetAttributeChangedSignal("BaitItem"):Connect(function()
+			local baitItem = CatTrapHandler.TrapModel:GetAttribute("BaitItem")
+			if baitItem then
+				CatTrapHandler:AddBaitVisual(baitItem)
 			end
 		end)
 	end

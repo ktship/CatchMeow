@@ -27,7 +27,8 @@ local requestUpdateEvent = events:WaitForChild("RequestInventoryUpdate")
 local inventory = {} -- 로컬 캐시
 local isUseMode = false -- 아이템 사용 모드
 local selectedSlot = nil -- 선택된 슬롯 인덱스
-local isOpen = false -- [v4.25k] 전역 상태 동기화를 위해 상단으로 이동
+local isOpen = false -- [인벤토리 열림 상태]
+local canPlace = true -- [충돌 감지] 설치 가능 여부
 
 -- UI 생성
 local screenGui = Instance.new("ScreenGui")
@@ -269,8 +270,9 @@ local function createPreviewModel(itemId)
 			previewModel = part
 		end
 	elseif itemId == "CatTrap" then
-		-- CatTrap Visual (Real Model)
-		local source = workspace:FindFirstChild("CatTrap")
+		-- Assets에서 깨끗한 원본 복제 (Workspace는 폴백)
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local source = (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
 		local part = nil
 		
 		if source then
@@ -435,8 +437,16 @@ RunService.RenderStepped:Connect(function()
 				-- 붕어빵 전용 회전
 				rotation = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
 			elseif currentItemId == "CatTrap" then
-				-- [Fix] CatTrap은 바닥에 평평하게 (사용자 요청: Y축 90도)
-				rotation = CFrame.Angles(0, math.rad(90), 0)
+				-- [동기화] 서버와 동일하게 플레이어를 바라보는 방향으로 회전
+				local char = player.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local lookAt = CFrame.lookAt(targetPos, Vector3.new(hrp.Position.X, targetPos.Y, hrp.Position.Z))
+					local rx, ry, rz = lookAt:ToOrientation()
+					rotation = CFrame.Angles(0, ry, 0)
+				else
+					rotation = CFrame.Angles(0, math.rad(90), 0)
+				end
 			else
 				-- 기타 아이템 (기본 평평 + Y축 회전값 없음)
 				rotation = CFrame.Angles(0, 0, 0)
@@ -478,22 +488,35 @@ RunService.RenderStepped:Connect(function()
 			updateTrapHighlight(isBait, trapModel)
 			
 			-- [충돌 감지] 다른 오브젝트와 겹치는지 확인
-			local canPlace = true
+			canPlace = true -- 전역 변수 업데이트
 			if currentItemId == "CatTrap" and _G.TrapSize then
-				local overlapParams = OverlapParams.new()
-				overlapParams.FilterType = Enum.RaycastFilterType.Exclude
-				overlapParams.FilterDescendantsInstances = {previewModel, player.Character}
-				
-				-- 실제 크기보다 살짝 작게 (0.2) 잡아서 끼임 방지
-				local boundSize = _G.TrapSize - Vector3.new(0.2, 0.2, 0.2)
-				local centerOffset = Vector3.new(0, _G.TrapSize.Y / 2, 0)
-				
-				local overlaps = workspace:GetPartBoundsInBox(CFrame.new(targetPos + centerOffset), boundSize, overlapParams)
-				
-				for _, p in ipairs(overlaps) do
-					if not p:IsA("Terrain") and p.CanCollide then
+				-- [거리 체크] 캐릭터 근처에만 설치 가능 (15 스터드 이내)
+				local char = player.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local distance = (targetPos - hrp.Position).Magnitude
+					if distance > 10 then
 						canPlace = false
-						break
+					end
+				end
+				
+				-- [충돌 체크] 다른 오브젝트와 겹치는지
+				if canPlace then
+					local overlapParams = OverlapParams.new()
+					overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+					overlapParams.FilterDescendantsInstances = {previewModel, player.Character}
+					
+					-- 실제 크기보다 살짝 작게 (0.2) 잡아서 끼임 방지
+					local boundSize = _G.TrapSize - Vector3.new(0.2, 0.2, 0.2)
+					local centerOffset = Vector3.new(0, _G.TrapSize.Y / 2, 0)
+					
+					local overlaps = workspace:GetPartBoundsInBox(CFrame.new(targetPos + centerOffset), boundSize, overlapParams)
+					
+					for _, p in ipairs(overlaps) do
+						if not p:IsA("Terrain") and p.CanCollide then
+							canPlace = false
+							break
+						end
 					end
 				end
 			end
@@ -717,10 +740,22 @@ local function createSlot(index, itemId, count)
 			part.Parent = slotViewport
 		end
 	elseif itemId == "CatTrap" then
-		-- Try to clone from Workspace
-		local source = workspace:FindFirstChild("CatTrap")
+		-- Assets에서 깨끗한 원본을 가져와서 썸네일 생성
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local source = (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
+		
 		if source then
 			local model = source:Clone()
+			
+			-- 불필요한 요소 정리 (하이라이트, 클릭감지 등)
+			for _, desc in ipairs(model:GetDescendants()) do
+				if desc:IsA("Highlight") or desc:IsA("ClickDetector") or desc:IsA("ProximityPrompt") then
+					desc:Destroy()
+				elseif desc:IsA("BasePart") then
+					desc.Anchored = true
+					desc.CanCollide = false
+				end
+			end
 			
 			-- Center it (사용자 요청 값 적용: 0, -140, 0)
 			local targetCF = CFrame.new(0,0,0) * CFrame.Angles(math.rad(0), math.rad(-140), math.rad(0))
@@ -850,8 +885,13 @@ mouse.Button1Down:Connect(function()
 	local result = getValidGroundRaycast(mouseRay.Origin, mouseRay.Direction * 1000)
 	
 	if result then
-		-- 서버에 아이템 배치 요청 (레이캐스트 결과 위치 사용 + [New] 클릭된 대상 전달)
-		-- 덫에 미끼를 놓는 경우를 위해 클릭된 파트(result.Instance)도 함께 보냄
+		-- [충돌 감지] 설치 불가 상태면 무시
+		if not canPlace then
+			print("[인벤토리] 설치 불가 - 충돌 감지됨")
+			return
+		end
+		
+		-- 서버에 아이템 배치 요청
 		placeEvent:FireServer(selectedSlot, result.Position, result.Instance)
 		cancelUseMode()
 	end

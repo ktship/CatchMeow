@@ -279,7 +279,8 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 				rotation = CFrame.Angles(0, ry, 0)
 			end
 			
-			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 1.8, 0))
+			-- 덫이 땅에 파묻히지 않도록 약간 올림
+			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 2.0, 0))
 			
 			-- 자동 설치 상태 전환 (부모 설정 전에 해야 Handler가 바로 감지함)
 			trapModel:SetAttribute("TargetState", "Setting")

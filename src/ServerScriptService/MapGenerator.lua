@@ -61,6 +61,15 @@ end
 -- [Helper] Safely get position from Model, Part, or Accessory
 local function getItemPos(item)
 	if not item then return nil end
+	
+	-- [v4.28] CatTrap: 실제 붕어빵 배치 좌표와 연동 (-2.5, -1.6, 0)
+	if item:IsA("Model") and item.Name == "CatTrap" then
+		local pivot = item:GetPivot()
+		-- 사용자가 제보한 적절한 위치로 오프셋 적용 (-2, -0.5, 0)
+		local baitOffset = CFrame.new(-2, -0.5, 0)
+		return (pivot * baitOffset).Position
+	end
+	
 	if item:IsA("PVInstance") then
 		return item:GetPivot().Position
 	elseif item:IsA("Accessory") and item:FindFirstChild("Handle") then
@@ -1947,6 +1956,12 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		local targetDebugPart = nil
 		local isGhostMode = false -- [Optimization] 불필요한 GetDescendants 호출 방지
 		
+		-- [v4.28] Stuck Detection: 막힘 감지 및 회피
+		local stuckTimer = 0 -- 막힘 지속 시간
+		local sideDodgeDir = 1 -- 좌우 회피 방향 (1=오른쪽, -1=왼쪽)
+		local isSideDodging = false -- 현재 회피 중인지
+		local sideDodgeTarget = nil -- 회피 목표 위치
+		
 		local TICK_RATE = 0.05
 		
 		local nextXZ = cleanPos -- [v4.23e] Initialize nextXZ outside loop for persistence
@@ -2356,9 +2371,49 @@ function MapGenerator.SpawnCat(locationCF, parent)
 								local dir = flatDir.Unit
 								local step = speed * TICK_RATE
 								nextXZ = currentPos + dir * step
+								
+								-- [v4.28] 막힘 해소: 타이머 리셋
+								stuckTimer = 0
+								isSideDodging = false
+								sideDodgeTarget = nil
 							else
-								-- blocked -> 제자리 멈춤 (미끄러짐 방지)
-								nextXZ = currentPos
+								-- [v4.28] Stuck Detection: 막힘 감지 및 회피
+								stuckTimer = stuckTimer + TICK_RATE
+								
+								if stuckTimer >= 5 then
+									-- 5초 이상 막힘: 타겟 해제
+									transitionToIdle("Stuck5s")
+									stuckTimer = 0
+									isSideDodging = false
+									sideDodgeTarget = nil
+								elseif stuckTimer >= 1 then
+									-- 1초 이상 막힘: 좌우 회피 시도
+									if not isSideDodging then
+										-- 회피 방향 설정 (좌우 번갈아가며)
+										local rightVector = Vector3.new(flatDir.Z, 0, -flatDir.X).Unit
+										local dodgeDist = 2 + math.random() -- 2~3 스터드
+										sideDodgeTarget = currentPos + rightVector * sideDodgeDir * dodgeDist
+										sideDodgeDir = -sideDodgeDir -- 다음번엔 반대 방향
+										isSideDodging = true
+									end
+									
+									-- 회피 목표로 이동
+									if sideDodgeTarget then
+										local dodgeDir = (sideDodgeTarget - currentPos)
+										dodgeDir = Vector3.new(dodgeDir.X, 0, dodgeDir.Z)
+										if dodgeDir.Magnitude > 0.3 then
+											nextXZ = currentPos + dodgeDir.Unit * speed * TICK_RATE
+										else
+											-- 회피 완료: 다시 원래 목표로
+											isSideDodging = false
+											sideDodgeTarget = nil
+											stuckTimer = 0
+										end
+									end
+								else
+									-- 1초 미만: 제자리 대기
+									nextXZ = currentPos
+								end
 							end
 							
 							-- Rotation

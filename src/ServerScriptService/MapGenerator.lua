@@ -2302,22 +2302,8 @@ function MapGenerator.SpawnCat(locationCF, parent)
 								end
 							end
 
-							-- [Debug Visual]
-							if not targetDebugPart then
-								targetDebugPart = Instance.new("Part")
-								targetDebugPart.Name = "AI_DEBUG_" .. shortId
-								targetDebugPart.Shape = Enum.PartType.Ball
-								targetDebugPart.Size = Vector3.new(1.2, 1.2, 1.2)
-								targetDebugPart.Color = Color3.fromRGB(255, 0, 0)
-								targetDebugPart.Material = Enum.Material.Neon
-								targetDebugPart.Transparency = 0.5
-								targetDebugPart.Anchored = true
-								targetDebugPart.CanCollide = false
-								targetDebugPart.CanQuery = false -- [v4.25v] Raycast 무시 (자기가 만든 빨간 점에 막히는 문제 해결)
-								targetDebugPart.CanTouch = false
-								targetDebugPart.Parent = workspace
-							end
-							targetDebugPart.Position = moveTarget
+							-- [v4.28] Target Debug Ball 제거 (사용자 요청)
+
 							
 							-- [v4.25s] 장애물 회피 (Wall Check)
 							-- 이동 방향으로 레이캐스트를 쏴서 벽이 있으면 멈춤 (CFrame 이동의 단점 보완)

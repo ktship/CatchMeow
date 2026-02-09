@@ -276,6 +276,12 @@ local function createPreviewModel(itemId)
 		if source then
 			part = source:Clone()
 			part.Name = "ItemPreview"
+			
+			-- [충돌 감지용] 문을 올리기 전에 크기 측정
+			local size = part:GetExtentsSize()
+			print("[인벤토리] 덫 크기 측정: " .. tostring(size))
+			_G.TrapSize = size
+			
 			-- 3D Preview: Reset position to 0,0,0
 			-- [Fix] 회전 (X축 90도)
 			if part:IsA("Model") then
@@ -318,6 +324,7 @@ local function createPreviewModel(itemId)
 		part.Parent = workspace
 		
 		local highlight = Instance.new("Highlight")
+		highlight.Name = "PlacementHighlight"
 		highlight.FillTransparency = 0.5
 		highlight.FillColor = Color3.fromRGB(0, 255, 0)
 		highlight.OutlineTransparency = 0
@@ -469,6 +476,39 @@ RunService.RenderStepped:Connect(function()
 			
 			local isBait = (currentItemId == "Bungeoppang" or currentItemId == "CatTreat")
 			updateTrapHighlight(isBait, trapModel)
+			
+			-- [충돌 감지] 다른 오브젝트와 겹치는지 확인
+			local canPlace = true
+			if currentItemId == "CatTrap" and _G.TrapSize then
+				local overlapParams = OverlapParams.new()
+				overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+				overlapParams.FilterDescendantsInstances = {previewModel, player.Character}
+				
+				-- 실제 크기보다 살짝 작게 (0.2) 잡아서 끼임 방지
+				local boundSize = _G.TrapSize - Vector3.new(0.2, 0.2, 0.2)
+				local centerOffset = Vector3.new(0, _G.TrapSize.Y / 2, 0)
+				
+				local overlaps = workspace:GetPartBoundsInBox(CFrame.new(targetPos + centerOffset), boundSize, overlapParams)
+				
+				for _, p in ipairs(overlaps) do
+					if not p:IsA("Terrain") and p.CanCollide then
+						canPlace = false
+						break
+					end
+				end
+			end
+			
+			-- 하이라이트 색상 업데이트 (녹색/빨간색)
+			local highlight = previewModel:FindFirstChild("PlacementHighlight")
+			if highlight then
+				if canPlace then
+					highlight.FillColor = Color3.fromRGB(0, 255, 0) -- 녹색 (설치 가능)
+					highlight.OutlineColor = Color3.fromRGB(0, 255, 100)
+				else
+					highlight.FillColor = Color3.fromRGB(255, 0, 0) -- 빨간색 (설치 불가)
+					highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+				end
+			end
 
 			-- Model이든 Part이든 PivotTo 사용
 			if previewModel:IsA("Model") then

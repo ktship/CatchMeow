@@ -242,51 +242,64 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then return end
 	
-	-- [New Logic] CatTrap: Teleport existing trap instead of spawning new item
+	-- [v4.28] CatTrap: Assets에서 복제하여 배치 (Multi-trap 지원)
 	if itemId == "CatTrap" then
 		print("Placing CatTrap at " .. tostring(position))
-		-- Reuse the logic from useItem or similar
-		local trapModel = game.Workspace:FindFirstChild("CatTrap")
-		if trapModel then
-			-- Calculate rotation to face player
+		
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local trapSource = assets and assets:FindFirstChild("CatTrap")
+		
+		-- [v4.28] 만약 Assets에 없으면 Workspace에서 찾아서 이동 (초기 1회)
+		if not trapSource then
+			local wsTrap = workspace:FindFirstChild("CatTrap")
+			if wsTrap and wsTrap:IsA("Model") then
+				-- 상태 초기화 후 이동
+				wsTrap:SetAttribute("TargetState", "Idle")
+				wsTrap:SetAttribute("BaitItem", nil)
+				wsTrap:SetAttribute("CaptureSignal", nil)
+				
+				wsTrap.Parent = assets
+				trapSource = wsTrap
+				print("[InventoryManager] Moved and Cleaned CatTrap from Workspace to Assets.")
+			end
+		end
+
+		if trapSource then
+			-- 복제 생성
+			local trapModel = trapSource:Clone()
+			trapModel.Name = "CatTrap"
+			
+			-- [v4.28] 위치와 회전 먼저 설정 후 부모 설정 (더 안정적인 등록)
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart")
 			local rotation = CFrame.Angles(0, 0, 0)
 			if hrp then
-				-- Trap faces the player
 				local lookAt = CFrame.lookAt(position, Vector3.new(hrp.Position.X, position.Y, hrp.Position.Z))
 				local rx, ry, rz = lookAt:ToOrientation()
 				rotation = CFrame.Angles(0, ry, 0)
 			end
 			
-			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 1.8, 0)) -- 높이 조정 (0.2 낮춤)
+			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 1.8, 0))
 			
-			-- [Fix] Enable Interaction (E key) - 사용자가 비활성화 요청 (470)
-			-- local prompt = trapModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-			-- if prompt then 
-			-- 	prompt.Enabled = true 
-			-- end
-			
-			-- [New] Auto-Set Trap (자동 설치 상태 전환)
-			print("[InventoryManager] Setting Trap Attribute TargetState to 'Setting'")
+			-- 자동 설치 상태 전환 (부모 설정 전에 해야 Handler가 바로 감지함)
 			trapModel:SetAttribute("TargetState", "Setting")
-			print("[InventoryManager] Current TargetState: " .. tostring(trapModel:GetAttribute("TargetState")))
+			trapModel.Parent = workspace
+			
+			-- 인벤토리에서 제거
+			slot.Count = slot.Count - 1
+			if slot.Count <= 0 then
+				table.remove(inv, slotIndex)
+			end
+			updateEvent:FireClient(player, inv)
+			return
 		else
-			warn("CatTrap model not found in Workspace")
+			warn("[InventoryManager] CatTrap asset NOT FOUND in Assets or Workspace!")
 		end
-		
-		-- Remove from inventory
-		slot.Count = slot.Count - 1
-		if slot.Count <= 0 then
-			table.remove(inv, slotIndex)
-		end
-		updateEvent:FireClient(player, inv)
-		return -- Skip standard WorldItem spawning
 	end
 	
 	-- [New] Bait Placement (미끼 놓기)
-	-- 아이템이 'Bungeoppang' 또는 'CatTreat'인 경우 덫에 설치 시도
-	if itemId == "Bungeoppang" or itemId == "CatTreat" then
+	-- 아이템이 'Bungeoppang'인 경우 덫에 설치 시도
+	if itemId == "Bungeoppang" then
 		-- 1. 클릭된 대상(hitInstance)이 덫인지 확인
 		local trapModel = hitInstance and hitInstance:FindFirstAncestor("CatTrap")
 		

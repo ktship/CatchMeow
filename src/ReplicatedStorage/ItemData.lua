@@ -14,15 +14,6 @@ ItemData.Items = {
 		Price = 5, -- 상점 가격
 		Effect = "LureCat", -- 사용 효과
 	},
-	CatTreat = {
-		Id = "CatTreat",
-		Name = "고양이 간식",
-		Icon = "🐟",
-		Description = "고양이를 유인하는 맛있는 간식",
-		MaxStack = 5,
-		Price = 20,
-		Effect = "LureCat",
-	},
 	SpeedBoost = {
 		Id = "SpeedBoost",
 		Name = "에너지 드링크",

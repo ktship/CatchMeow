@@ -30,12 +30,19 @@ CatTrap.__index = CatTrap
 function CatTrap.new(model)
 	local self = setmetatable({}, CatTrap)
 	self.Model = model
+	
+	-- [v4.28] 최우선순위: 클릭 회수 기능 먼저 설정 (지연 방지)
+	self:SetupInteraction()
+	
 	CollectionService:AddTag(model, TRAP_TAG) -- [v4.25o] Tag for AI optimization
 	self.PartEnter = model:WaitForChild(PART_ENTER_NAME, 5)
 	self.CurrentState = model:GetAttribute("TargetState") or States.IDLE
 	self.BaitModel = nil
 	
-	if not self.PartEnter then return nil end
+	if not self.PartEnter then 
+		warn("[CatTrap] Critical error: PartEnter not found! Interaction might work but trap logic will fail.")
+		return self -- [v4.28] 그래도 self는 반환해서 Pickup은 되게 함
+	end
 	
 	-- 초기화: PartEnter의 자식들 용접
 	for _, child in ipairs(self.PartEnter:GetDescendants()) do
@@ -50,9 +57,9 @@ function CatTrap.new(model)
 	
 	-- [v4.25z] Fix Floating Trap: Lower by 0.2 studs
 	-- 사용자가 덫이 살짝 떠있다고 제보하여 강제로 0.2스터드 내림
-	print("[CatTrapHandler] Before PivotTo: Y=" .. tostring(model:GetPivot().Position.Y))
+	-- print("[CatTrapHandler] Before PivotTo: Y=" .. tostring(model:GetPivot().Position.Y))
 	model:PivotTo(model:GetPivot() * CFrame.new(0, -0.2, 0))
-	print("[CatTrapHandler] After PivotTo: Y=" .. tostring(model:GetPivot().Position.Y))
+	-- print("[CatTrapHandler] After PivotTo: Y=" .. tostring(model:GetPivot().Position.Y))
 	
 	-- 상대 좌표 저장 (위치 조정 후 저장해야 정확함)
 	local modelPivot = model:GetPivot()
@@ -143,8 +150,126 @@ function CatTrap.new(model)
 			model:SetAttribute("CaptureSignal", nil) -- 신호 리셋
 		end
 	end)
+
+	-- [v4.28] 초기 상태 결정 (설치 시 설정된 상태가 있으면 존중, 없으면 IDLE)
+	local startState = model:GetAttribute("TargetState") or States.IDLE
+	self:ApplyState(startState)
+	model:SetAttribute("TargetState", startState)
+	model:SetAttribute("BaitItem", nil)
+	model:SetAttribute("CaptureSignal", nil)
+
+	-- [v4.28] Click to Pickup (Bungeoppang Style)
+	self.IsPickingUp = false -- [v4.28] 중복 회수 방지용 데드락/데분스
+	self:SetupInteraction()
 	
+	-- print("[CatTrap] New trap object created and initialized to IDLE for: " .. model:GetFullName())
 	return self
+end
+
+function CatTrap:SetupInteraction()
+	local model = self.Model
+	
+	-- [v4.28] 클릭 가능한 부품들 정의 (정적 파트들 위주)
+	local candidates = {"Wall", "Body", "TrapFloor", "Center", "Floor", "Frame", "Base"}
+	local setupCount = 0
+
+	local function applyInteraction(part)
+		if not part or not part:IsA("BasePart") then return end
+		-- [v4.28] 모든 파트 클릭 허용 (문 포함)
+		-- if part.Name == "PartEnter" then return end -- 이전 제외 로직 제거
+
+		-- 클릭 가능하게 속성 강제 조정 (매우 중요)
+		part.CanQuery = true
+		part.CanTouch = true
+		if part.Transparency == 1 then part.Transparency = 0.99 end
+		
+		-- [Fix] 기존 PickupDetector가 있으면 일단 제거 (신선한 연결을 위해)
+		local old = part:FindFirstChild("PickupDetector")
+		if old then old:Destroy() end
+
+		-- ClickDetector 추가
+		local cd = Instance.new("ClickDetector")
+		cd.Name = "PickupDetector"
+		cd.MaxActivationDistance = 32 -- [v4.28] 거리 상향 (20 -> 32)
+		cd.Parent = part
+		
+		-- 클릭 이벤트 연결
+		cd.MouseClick:Connect(function(player)
+			-- print("[CatTrap] MouseClick detected on " .. part.Name .. " by " .. player.Name)
+			self:Pickup(player)
+		end)
+		setupCount = setupCount + 1
+	end
+
+	-- 1. [v4.29] 모든 BasePart에 전부 ClickDetector 설치 (이름 무관)
+	-- 기존 코드는 FindFirstChild로 하나씩만 찾아서 나머지 벽/바닥이 클릭 안되는 문제 발생
+	for _, desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			-- 이름 필터링 (필요하다면 여기서 제외)
+			-- if desc.Name == "PartEnter" then ... end -- (이제 포함함)
+			applyInteraction(desc)
+		end
+	end
+
+	-- 2. Highlight 추가 (호버 피드백)
+	local hl = model:FindFirstChild("PickupHighlight") or Instance.new("Highlight")
+	hl.Name = "PickupHighlight"
+	hl.FillTransparency = 1
+	hl.OutlineTransparency = 0
+	hl.OutlineColor = Color3.fromRGB(255, 255, 100)
+	hl.FillColor = Color3.fromRGB(255, 255, 150)
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Adornee = model
+	hl.Enabled = false
+	hl.Parent = model
+
+	-- 하이라이트 제어 (모든 파트의 ClickDetector에 연결)
+	for _, desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("ClickDetector") and desc.Name == "PickupDetector" then
+			desc.MouseHoverEnter:Connect(function() hl.Enabled = true end)
+			desc.MouseHoverLeave:Connect(function() hl.Enabled = false end)
+		end
+	end
+	
+	-- print("[CatTrap] SetupInteraction complete. Detectors created: " .. setupCount)
+end
+
+function CatTrap:Pickup(player)
+	if self.IsPickingUp then return end -- 이미 회수 중이면 종료
+	self.IsPickingUp = true
+	
+	-- print("[CatTrap] Pickup requested by " .. player.Name .. " for model: " .. self.Model:GetFullName())
+	-- [v4.28] 더 넓은 범위에서 고양이 탐색 및 해제
+	local trapPivot = self.Model:GetPivot()
+	local region = Region3.new(trapPivot.Position - Vector3.new(5, 5, 5), trapPivot.Position + Vector3.new(5, 5, 5))
+	local parts = workspace:FindPartsInRegion3(region, nil, 50)
+	
+	for _, p in ipairs(parts) do
+		if p.Parent and p.Parent:IsA("Model") and p.Parent:GetAttribute("IsTrapped") then
+			-- print("[CatTrap] Releasing cat: " .. p.Parent.Name)
+			p.Parent:SetAttribute("IsTrapped", false)
+			
+			local weld = p.Parent:FindFirstChild("TrapWeld", true)
+			if weld then weld:Destroy() end
+		end
+	end
+
+	-- 2. 미끼 제거
+	self.Model:SetAttribute("BaitItem", nil)
+	
+	-- 3. 인벤토리 추가
+	if _G.InventoryManager and _G.InventoryManager.AddItem then
+		local success = _G.InventoryManager.AddItem(player, "CatTrap", 1)
+		if success then
+			-- 4. 덫 제거 (traps 테이블에서도 제거될 것임 - Heartbeat)
+			-- print("[CatTrap] Successfully returned to inventory. Destroying model.")
+			self.Model:Destroy()
+		else
+			warn("[CatTrap] Failed to add trap to inventory for " .. player.Name)
+		end
+	else
+		warn("[CatTrap] InventoryManager.AddItem not found! Cannot pickup.")
+	end
 end
 
 function CatTrap:SetModelTransparency(model, transparency)
@@ -320,7 +445,7 @@ function CatTrap:PerformCapture(targetCatId)
 			weld.Part0 = anchor
 			weld.Part1 = torso
 			weld.Parent = torso
-			print("[CatTrap] NPC Welded to Trap.")
+			-- print("[CatTrap] NPC Welded to Trap.")
 		end
 	else
 		warn("[CatTrap] Capture Signal received but NO CAT FOUND in region! Closing trap anyway.")
@@ -354,11 +479,24 @@ end
 local traps = {}
 
 local function registerTrap(model)
+	if not model or not model.Parent then return end
+	if not model:IsDescendantOf(workspace) then return end 
+	
+	-- [v4.28] 중복 등록 원천 차단 (Atomic check)
 	if traps[model] then return end
+	
+	-- 임시 마커 삽입 (Yield 하기 전에 선점)
+	traps[model] = "PENDING"
+	
+	-- print("[CatTrapManager] Registering trap: " .. model:GetFullName())
 	local trapObj = CatTrap.new(model)
+	
 	if trapObj then
 		traps[model] = trapObj
-		print("[CatTrapManager] Registered new trap: " .. model:GetFullName())
+		-- print("[CatTrapManager] SUCCESS: Trap registered.")
+	else
+		traps[model] = nil -- 실패 시 마커 제거
+		warn("[CatTrapManager] FAILED: Could not create trap object for " .. model.Name)
 	end
 end
 
@@ -369,18 +507,30 @@ for _, obj in ipairs(workspace:GetDescendants()) do
 	end
 end
 
--- 새로 배치되는 덫 등록
-workspace.DescendantAdded:Connect(function(obj)
+-- 새로 배치되는 덫 등록 (CollectionService + ChildAdded 이중 감지로 안정성 극대화)
+CollectionService:GetInstanceAddedSignal(TRAP_TAG):Connect(registerTrap)
+
+workspace.ChildAdded:Connect(function(obj)
 	if obj.Name == TRAP_NAME and obj:IsA("Model") then
-		registerTrap(obj)
+		task.delay(0.1, function()
+			registerTrap(obj)
+		end)
 	end
 end)
+
+-- 이미 태그가 붙어있는 경우 (서버 시작 시)
+for _, obj in ipairs(CollectionService:GetTagged(TRAP_TAG)) do
+	registerTrap(obj)
+end
 
 -- 주기적 업데이트 (고양이 포획 체크)
 RunService.Heartbeat:Connect(function()
 	for model, trap in pairs(traps) do
-		if not model.Parent then
+		-- [v4.28] Workspace에 있을 때만 업데이트 및 유지
+		if not model.Parent or not model:IsDescendantOf(workspace) then
+			-- [v4.28] Assets 폴더로 이동된 원본은 추적 목록에서 제외 (복제용으로만 사용)
 			traps[model] = nil
+			-- print("[CatTrapManager] Unregistered trap (Moved or Destroyed): " .. model.Name)
 		else
 			trap:Update()
 		end

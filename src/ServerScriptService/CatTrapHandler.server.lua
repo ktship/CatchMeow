@@ -271,21 +271,23 @@ end
 -- [v4.25q] 덫 안의 고양이 NPC를 찾아 포획 (파괴하지 않고 가둠)
 function CatTrap:PerformCapture(targetCatId)
 	local trapPos = self.Model:GetPivot().Position
-	local region = Region3.new(trapPos - Vector3.new(10, 5, 10), trapPos + Vector3.new(10, 5, 10))
-	local parts = workspace:FindPartsInRegion3(region, nil, 50)
+	-- [v4.28] 범위를 살짝 넓히고 더 견고한 탐색
+	local region = Region3.new(trapPos - Vector3.new(12, 6, 12), trapPos + Vector3.new(12, 6, 12))
+	local parts = workspace:FindPartsInRegion3(region, nil, 100)
 	
 	local targetCatModel = nil
 	for _, p in ipairs(parts) do
 		if p.Name == "Torso" and p.Parent and p.Parent:IsA("Model") then
 			local catModel = p.Parent
-			if targetCatId and string.find(catModel.Name, string.sub(targetCatId, 1, 4)) then
+			-- [v4.28] Name 또는 ID 매칭 (앞부분 4자기 매칭)
+			if targetCatId and (string.find(catModel.Name, string.sub(targetCatId, 1, 4)) or catModel:GetAttribute("RefID") == targetCatId) then
 				targetCatModel = catModel
 				break
 			end
 		end
 	end
 	
-	-- Fallback
+	-- Fallback: 그냥 근처에 있는 고양이 아무나
 	if not targetCatModel then
 		for _, p in ipairs(parts) do
 			if p.Name == "Torso" and p.Parent and p.Parent:IsA("Model") then
@@ -301,16 +303,15 @@ function CatTrap:PerformCapture(targetCatId)
 	if targetCatModel then
 		print("[CatTrap] CAPTURING NPC (LIVE): " .. targetCatModel.Name)
 		
-		-- 1. NPC에 상태 부여 (AI가 움직임을 멈추도록 함)
+		-- 1. NPC에 상태 부여
 		targetCatModel:SetAttribute("IsTrapped", true)
 		
 		-- 2. 덫 내부로 위치 조정 및 용접
-		-- 덫의 입구 안쪽 살짝 뒤로 배치
 		local trapPivot = self.Model:GetPivot()
-		local targetCF = trapPivot * CFrame.new(0, -0.2, 0) -- 덫 바닥 중앙 부근
+		local targetCF = trapPivot * CFrame.new(0, -0.2, 0)
 		targetCatModel:PivotTo(targetCF)
 		
-		-- 용접 (고정)
+		-- 용접
 		local torso = targetCatModel:FindFirstChild("Torso")
 		local anchor = self.Model.PrimaryPart or self.PartEnter
 		if torso and anchor then
@@ -321,17 +322,23 @@ function CatTrap:PerformCapture(targetCatId)
 			weld.Parent = torso
 			print("[CatTrap] NPC Welded to Trap.")
 		end
-		
-		-- 3. 덫 상태 변경
-		self.Model:SetAttribute("TargetState", States.CATCHED)
-		
-		-- 4. 미끼 소모
-		self.Model:SetAttribute("BaitItem", nil)
-		
-		-- 5. 가짜 고양이 비주얼 비활성화 (NPC가 들어왔으므로)
-		if self.CatModelVisual then
-			self:SetModelTransparency(self.CatModelVisual, 1)
-		end
+	else
+		warn("[CatTrap] Capture Signal received but NO CAT FOUND in region! Closing trap anyway.")
+	end
+
+	-- [v4.28] CRITICAL: 고양이를 찾았든 못 찾았든 덫은 무조건 닫고 미끼는 제거한다.
+	-- (고양이가 이미 사라졌거나 렉으로 못 찾은 경우에도 덫이 열려있어서 생기는 버그 방지)
+	
+	-- 3. 덫 상태 변경 (CATCHED로 변경하여 문을 닫음)
+	self.Model:SetAttribute("TargetState", States.CATCHED)
+	self:ApplyState(States.CATCHED) -- 즉시 적용 강제
+	
+	-- 4. 미끼 소모
+	self.Model:SetAttribute("BaitItem", nil)
+	
+	-- 5. 가짜 고양이 비주얼 비활성화 
+	if self.CatModelVisual then
+		self:SetModelTransparency(self.CatModelVisual, targetCatModel and 1 or 0)
 	end
 end
 

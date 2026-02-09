@@ -27,6 +27,7 @@ local requestUpdateEvent = events:WaitForChild("RequestInventoryUpdate")
 local inventory = {} -- 로컬 캐시
 local isUseMode = false -- 아이템 사용 모드
 local selectedSlot = nil -- 선택된 슬롯 인덱스
+local isOpen = false -- [v4.25k] 전역 상태 동기화를 위해 상단으로 이동
 
 -- UI 생성
 local screenGui = Instance.new("ScreenGui")
@@ -38,7 +39,7 @@ screenGui.Parent = playerGui
 local invButton = Instance.new("TextButton")
 invButton.Name = "InventoryButton"
 invButton.Size = UDim2.new(0, 60, 0, 60)
-invButton.Position = UDim2.new(1, -80, 0.5, -30) -- 우측 중앙 위쪽
+invButton.Position = UDim2.new(1, -80, 0.8, -30) -- [v4.25j] 우측 하단으로 고정 위치 이동
 invButton.AnchorPoint = Vector2.new(0, 0)
 invButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
 invButton.Text = "🎒"
@@ -64,8 +65,18 @@ invWindow.Visible = false
 invWindow.Parent = screenGui
 
 local winCorner = Instance.new("UICorner")
-winCorner.CornerRadius = UDim.new(0, 16)
 winCorner.Parent = invWindow
+
+-- [v4.25k] 인벤토리 가시성 및 버튼 상태 통합 관리 함수
+local function setInventoryVisible(visible)
+	isOpen = visible
+	invWindow.Visible = isOpen
+	if isOpen then
+		invButton.BackgroundColor3 = Color3.fromRGB(100, 100, 150) -- 열림 (강조)
+	else
+		invButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80) -- 닫힘 (기본)
+	end
+end
 
 -- 타이틀
 local title = Instance.new("TextLabel")
@@ -340,8 +351,11 @@ local function destroyPreviewModel()
 		print("[InventoryUI] Destroying Preview Model: " .. tostring(previewModel))
 		previewModel:Destroy()
 		previewModel = nil
-	else
-		print("[InventoryUI] destroyPreviewModel called but no model.")
+	end
+	
+	-- [v4.25d] 하이라이트 정리
+	if _G.BaitHighlight then
+		_G.BaitHighlight.Enabled = false
 	end
 end
 
@@ -367,6 +381,9 @@ local function getValidGroundRaycast(origin, direction)
 		if not hitPart.Anchored then isDynamic = true end -- 움직이는 파트
 		if hitPart.Parent:FindFirstChildOfClass("Humanoid") then isDynamic = true end -- NPC/플레이어
 		if hitPart.Parent:IsA("Model") and hitPart.Parent:FindFirstChildOfClass("VehicleSeat") then isDynamic = true end -- 차량
+		
+		-- [v4.25d] 덫은 미끼 설치를 위해 레이캐스트 대상에 포함 (무시하지 않음)
+		if hitPart:FindFirstAncestor("CatTrap") then isDynamic = false end
 		
 		if isDynamic then
 			-- 동적 오브젝트면 무시 목록에 추가하고 다시 레이캐스트
@@ -418,6 +435,41 @@ RunService.RenderStepped:Connect(function()
 				rotation = CFrame.Angles(0, 0, 0)
 			end
 			
+			-- [v4.25d] 덫 외곽선 하이라이트 (미끼 설치 가능 피드백)
+			local trapModel = result.Instance:FindFirstAncestor("CatTrap")
+			local function updateTrapHighlight(isBait, trap)
+				-- 전역 highlight 변수 사용 (없으면 생성)
+				if not _G.BaitHighlight then
+					local h = Instance.new("Highlight")
+					h.Name = "BaitHighlight"
+					h.FillTransparency = 0.5
+					h.FillColor = Color3.fromRGB(0, 255, 0) -- Green
+					h.OutlineColor = Color3.fromRGB(0, 255, 100)
+					h.OutlineTransparency = 0
+					h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- [Fix] 가려지지 않게 설정
+					h.Parent = screenGui -- [Fix] Parent 설정 (screenGui는 파일 상단에 정의됨)
+					_G.BaitHighlight = h
+				end
+				
+				local h = _G.BaitHighlight
+				if isBait and trap then
+					-- [v4.25d] Setting 상태일 때만 하이라이트 표시
+					-- [v4.25e] TargetState가 nil인 경우도 대비 (IDLE 등)
+					local currentState = trap:GetAttribute("TargetState")
+					if currentState == "Setting" then
+						h.Adornee = trap
+						h.Enabled = true
+					else
+						h.Enabled = false
+					end
+				else
+					h.Enabled = false
+				end
+			end
+			
+			local isBait = (currentItemId == "Bungeoppang" or currentItemId == "CatTreat")
+			updateTrapHighlight(isBait, trapModel)
+
 			-- Model이든 Part이든 PivotTo 사용
 			if previewModel:IsA("Model") then
 				previewModel:PivotTo(CFrame.new(targetPos) * rotation)
@@ -439,7 +491,8 @@ RunService.RenderStepped:Connect(function()
 			setTransparency(previewModel, 0)
 			
 		else
-			-- 허공이거나 유효한 지면이 없으면 안 보임
+			-- [v4.25d] 허공일 때 하이라이트 끄기
+			if _G.BaitHighlight then _G.BaitHighlight.Enabled = false end
 			local function setTransparency(obj, t)
 				if obj:IsA("BasePart") then
 					obj.Transparency = t
@@ -689,7 +742,7 @@ local function createSlot(index, itemId, count)
 	-- 클릭 시 사용 모드 진입
 	slot.MouseButton1Click:Connect(function()
 		-- 인벤토리 창 닫기
-		invWindow.Visible = false
+		setInventoryVisible(false) -- [v4.25k] 통합 함수 사용
 		
 		-- 사용 모드 진입
 		isUseMode = true
@@ -729,10 +782,8 @@ local function refreshUI()
 end
 
 -- 토글 함수
-local isOpen = false
 local function toggleInventory()
-	isOpen = not isOpen
-	invWindow.Visible = isOpen
+	setInventoryVisible(not isOpen) -- [v4.25k] 통합 함수 사용
 end
 
 -- 사용 모드 취소
@@ -777,8 +828,7 @@ end)
 -- 이벤트 연결
 invButton.MouseButton1Click:Connect(toggleInventory)
 closeBtn.MouseButton1Click:Connect(function()
-	isOpen = false
-	invWindow.Visible = false
+	setInventoryVisible(false) -- [v4.25k] 통합 함수 사용
 end)
 -- [Debug] 아이템 회전 조절 UI
 local function createDebugUI()

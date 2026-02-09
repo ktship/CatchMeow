@@ -450,7 +450,7 @@ function MapGenerator.GenerateProcedural()
 	-- 경계
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 	
-	-- [Added] Wandering Cats (Increased to 110)
+	-- [Added] Wandering Cats
 	local catsFolder = Instance.new("Folder")
 	catsFolder.Name = "Cats"
 	catsFolder.Parent = mapFolder
@@ -602,7 +602,7 @@ function MapGenerator.LoadMapFromData(mapData)
 	MapGenerator.CreateBoundaryZone(mapFolder, mapSize)
 	MapGenerator.CreateTunnels(mapFolder, mapSize) -- [Added] Regenerate Tunnels
 	
-	-- [Added] Wandering Cats (Increased to 110)
+	-- [Added] Wandering Cats
 	local catsFolder = Instance.new("Folder")
 	catsFolder.Name = "Cats"
 	catsFolder.Parent = mapFolder
@@ -1919,9 +1919,33 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		
 		-- Raycast Params
 		local rayParams = RaycastParams.new()
-		-- [Prevent Stacking] Exclude the entire Cats folder so cats don't detect each other as ground
-		rayParams.FilterDescendantsInstances = {parent}
+		-- [v4.25o] 덫이나 다른 고양이 등을 제외하여 오동작(천익 점프 등) 방지
+		local function updateRayParams()
+			local excludeList = {parent} -- 기본적으로 Cats 폴더 제외
+			-- [Fix] CatTrap을 제외 목록에서 제거하여 AI가 덫을 장애물/지형으로 인식하게 함
+			-- local CollectionService = game:GetService("CollectionService")
+			-- local traps = CollectionService:GetTagged("CatTrap")
+			-- for _, trap in ipairs(traps) do table.insert(excludeList, trap) end
+			rayParams.FilterDescendantsInstances = excludeList
+		end
+		updateRayParams()
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		
+		-- [v4.25s] 벽/장애물 감지용 (덫 포함)
+		local obstacleRayParams = RaycastParams.new()
+		obstacleRayParams.FilterDescendantsInstances = {model} -- 자기 자신만 제외
+		obstacleRayParams.FilterType = Enum.RaycastFilterType.Exclude
+		
+		-- [v4.25s] Safety Cleanup: 강제로 물리 상태 초기화 (찌거기 버그 방지)
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then p.CanCollide = true end
+		end
+		hum.PlatformStand = false
+		
+		-- [v4.25o] 덫 진입 상태 관리용
+		local enteredEntrance = false
+		local targetDebugPart = nil
+		local isGhostMode = false -- [Optimization] 불필요한 GetDescendants 호출 방지
 		
 		local TICK_RATE = 0.05
 		
@@ -1967,16 +1991,23 @@ function MapGenerator.SpawnCat(locationCF, parent)
 				
 				if heightDiff > maxJumpHeight then
 					-- Unreachable
-					-- transitionToIdle("Unreachable") -- Cannot call function defined below? No, it's defined above loop.
-					-- But wait: transitionToIdle sets state="Idle".
-					-- But wait: transitionToIdle sets state="Idle".
-					-- If we call it here, it changes state for logic below. VALID.
-					if state ~= "Eating" then
-						transitionToIdle("Unreachable")
+					-- [v4.27f] Don't abandon CatTrap target when near entrance
+					-- 덫 근처에서 바닥 높이 차이로 인해 잘못된 "도달 불가" 판정 방지
+					local nearTrap = false
+					if targetFood and targetFood.Name == "CatTrap" then
+						local distToTrap = (currentPos - targetFood:GetPivot().Position).Magnitude
+						if distToTrap < 10 then
+							nearTrap = true
+						end
 					end
-					nextXZ = currentPos 
-					finalY = currentPos.Y
-					idleDuration = 0.5 
+					
+					if state ~= "Eating" and not nearTrap then
+						transitionToIdle("Unreachable")
+						nextXZ = currentPos 
+						finalY = currentPos.Y
+						idleDuration = 0.5 
+					end
+					-- nearTrap인 경우 멈추지 않고 계속 이동 허용 
 				elseif heightDiff > groundThreshold and heightDiff <= maxJumpHeight then
 					isJumping = true
 					vVel = jumpPower
@@ -2016,8 +2047,15 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			
 			-- Update Transform
 			cleanPos = Vector3.new(nextXZ.X, finalY, nextXZ.Z)
-			-- [v4.25b] Reset orientation from logicRotation BEFORE applying animations
-			torso.CFrame = CFrame.new(cleanPos) * logicRotation
+			
+			-- [v4.25q] 가둬진 상태에서는 물리 엔진(Weld)이 위치를 제어하도록 함
+			if state == "Trapped" then
+				cleanPos = torso.Position
+				logicRotation = torso.CFrame.Rotation
+			else
+				-- [v4.25b] Reset orientation from logicRotation BEFORE applying animations
+				torso.CFrame = CFrame.new(cleanPos) * logicRotation
+			end
 			
 			-- [v4.23h] Sync Logic Base
 			currentPos = cleanPos
@@ -2028,16 +2066,40 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			searchTimer += TICK_RATE
 			
 			-- 1. State Logic
-			if state == "Idle" then
+			local isTrapped = model:GetAttribute("IsTrapped")
+			if isTrapped then
+				state = "Trapped"
+			end
+
+			if state == "Trapped" then
+				-- [v4.25q] 가둬진 상태: 움직이지 않고 제자리에서 애니메이션만
+				nextXZ = currentPos
+				transitionToIdle = function() end -- 상태 전이 금지
+				if targetDebugPart then targetDebugPart:Destroy(); targetDebugPart = nil end
+			elseif state == "Idle" then
 				-- Search for food every 0.25 seconds
 				if searchTimer >= 0.25 and searchCooldown <= 0 then
 					searchTimer = 0
+					
+					-- [v4.25l] 통합 검색 리스트 (WorldItems + 덫)
+					local searchList = {}
 					local worldItems = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WorldItems")
 					if worldItems then
+						for _, item in ipairs(worldItems:GetChildren()) do table.insert(searchList, item) end
+					end
+					
+					-- [New] 미끼가 있는 덫 추가
+					for _, obj in ipairs(workspace:GetChildren()) do
+						if obj.Name == "CatTrap" and obj:GetAttribute("BaitItem") then
+							table.insert(searchList, obj)
+						end
+					end
+					
+					if #searchList > 0 then
 						local closestFood = nil
-						local minDist = 20 -- [v4.26c] Range reduced from 50 to 20
+						local minDist = 40 -- [v4.25l] 덫 유인을 위해 범위를 다시 40으로 증가 (기존 20)
 						
-						for _, item in ipairs(worldItems:GetChildren()) do
+						for _, item in ipairs(searchList) do
 							-- [v4.23o] Assign Unique ID for Debugging
 							if not item:GetAttribute("RefID") then
 								item:SetAttribute("RefID", HttpService:GenerateGUID(false):sub(1, 8))
@@ -2120,10 +2182,33 @@ function MapGenerator.SpawnCat(locationCF, parent)
 					idleTimer = 0
 					idleDuration = math.random(3, 8)
 				else
-					-- Move Step
+					-- [v4.25s] 장애물 회피 (Wander State)
 					local dir = flatDir.Unit
 					local step = speed * TICK_RATE
-					nextXZ = currentPos + dir * step
+					
+					-- 단일 레이캐스트 (머리 높이에서 발사)
+					local checkDist = math.min(flatDir.Magnitude, 3.0)
+					local rayOrigin = currentPos + Vector3.new(0, 1.0, 0) -- 머리 높이
+					local hitResult = workspace:Raycast(rayOrigin, dir * checkDist, obstacleRayParams)
+					
+					if hitResult then
+						local isTrapPart = hitResult.Instance:FindFirstAncestor("CatTrap") ~= nil
+						if isTrapPart then
+							-- 덫 감지: 뒤로 물러남
+							state = "Idle"
+							idleTimer = 0
+							idleDuration = 1
+							nextXZ = currentPos - dir * 1.5
+						else
+							-- 일반 장애물: 멈춤
+							state = "Idle"
+							idleTimer = 0
+							idleDuration = 1
+							nextXZ = currentPos
+						end
+					else
+						nextXZ = currentPos + dir * step
+					end
 					
 					-- Rotation (Only when moving)
 					-- [v4.22] Safety check for degenerate lookAt
@@ -2156,69 +2241,182 @@ function MapGenerator.SpawnCat(locationCF, parent)
 							print(string.format("[AI] %s ABORT: Cannot find position for %s (Despawned?)", shortId, targetFood.Name))
 							transitionToIdle("FoodDespawned")
 						else
-							-- Move towards foodPos
-							local dirVector = (foodPos - currentPos)
-							local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
-						
-						if flatDir.Magnitude < 1.8 then
-							-- [REACHED FOOD] Start Eating
-							
-							-- [v4.23n] Final Existence Check
-							if not targetFood or not targetFood.Parent then
-								transitionToIdle("FoodDespawnedAtLastMoment")
-							
-							-- Final confirmation
-							elseif FoodClaims[targetFood] == catId then
-								state = "Eating"
-								idleTimer = 0
+							-- [v4.25p] 덫 진입 로직 정상적인 else 위치로 복구
+							local moveTarget = foodPos
+							local moveTarget = foodPos
+							if targetFood.Name == "CatTrap" then
+								-- [DEBUG] Trace Targeting
+								if tick() % 1 < 0.1 then
+									print(string.format("[AI TRAP DEBUG] Cat %s processing Trap Logic", shortId))
+								end
 								
-								-- [v4.2] Set Exclusive Eating Attribute
-								targetFood:SetAttribute("EatingBy", catId)
-								print(string.format("[AI] %s STARTED EATING %s (%s) -> EatingBy Locked", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
-								
-								-- [v4.3] Disable Pickup for players
-								local cd = targetFood:FindFirstChildOfClass("ClickDetector")
-								if cd then cd.MaxActivationDistance = 0 end
-								
-								-- [v4.25c] Restored targeting beam cleanup
-								targetBeam.Enabled = false
-								-- [VISUAL FEEDBACK]
-								local heartGUI = Instance.new("BillboardGui")
-								heartGUI.Name = "HappyHeart"
-								heartGUI.Size = UDim2.new(2, 0, 2, 0)
-								heartGUI.Adornee = head
-								heartGUI.StudsOffset = Vector3.new(0, 2, 0)
-								heartGUI.Parent = head
-								
-								local label = Instance.new("TextLabel")
-								label.BackgroundTransparency = 1
-								label.Size = UDim2.new(1, 0, 1, 0)
-								label.Text = "❤️"
-								label.TextScaled = true
-								label.Parent = heartGUI
-								
-								task.delay(2.5, function()
-									if heartGUI then heartGUI:Destroy() end
-								end)
-							else
-								transitionToIdle("ClaimLostAtLastMoment")
+								local partEnter = targetFood:FindFirstChild("PartEnter", true)
+								if partEnter then
+									local pivot = targetFood:GetPivot()
+									local gatePos = partEnter.Position
+									local flatGatePos = Vector3.new(gatePos.X, pivot.Position.Y, gatePos.Z)
+									
+									local dirOut = (flatGatePos - pivot.Position)
+									dirOut = (dirOut.Magnitude < 0.1) and pivot.LookVector or dirOut.Unit
+									
+									-- 입구 웨이포인트 (6스터드 밖)
+									local entranceWaypoint = flatGatePos + dirOut * 6
+									
+									local distToBait = (currentPos - foodPos).Magnitude
+									local distToWaypoint = (currentPos - entranceWaypoint).Magnitude
+									
+									-- [Optimization] 고스트 모드: 상태 변화 시에만 호출
+									if (distToBait < 12) and not isGhostMode then
+										isGhostMode = true
+										-- [v4.25r] 물리 충돌 복구: 벽 뚫기 방지
+										-- 대신 점프와 등반만 제한하여 얌전히 걷도록 유도
+										hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+										hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+									elseif distToBait >= 12 and isGhostMode then
+										isGhostMode = false
+										hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+										hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+									end
+
+									-- [v4.25p] 경로 유도 강화
+									if not enteredEntrance then
+										moveTarget = entranceWaypoint
+										if distToWaypoint < 1.5 then enteredEntrance = true end
+									end
+									if distToBait > 20 then enteredEntrance = false end
+								end
 							end
-						else
-							-- Move Step
-							local dir = flatDir.Unit
-							local step = speed * TICK_RATE
-							nextXZ = currentPos + dir * step
+
+							-- [Debug Visual]
+							if not targetDebugPart then
+								targetDebugPart = Instance.new("Part")
+								targetDebugPart.Name = "AI_DEBUG_" .. shortId
+								targetDebugPart.Shape = Enum.PartType.Ball
+								targetDebugPart.Size = Vector3.new(1.2, 1.2, 1.2)
+								targetDebugPart.Color = Color3.fromRGB(255, 0, 0)
+								targetDebugPart.Material = Enum.Material.Neon
+								targetDebugPart.Transparency = 0.5
+								targetDebugPart.Anchored = true
+								targetDebugPart.CanCollide = false
+								targetDebugPart.CanQuery = false -- [v4.25v] Raycast 무시 (자기가 만든 빨간 점에 막히는 문제 해결)
+								targetDebugPart.CanTouch = false
+								targetDebugPart.Parent = workspace
+							end
+							targetDebugPart.Position = moveTarget
+							
+							-- [v4.25s] 장애물 회피 (Wall Check)
+							-- 이동 방향으로 레이캐스트를 쏴서 벽이 있으면 멈춤 (CFrame 이동의 단점 보완)
+							local dirVector = (moveTarget - currentPos)
+							local flatDir = Vector3.new(dirVector.X, 0, dirVector.Z)
+							local distToMove = flatDir.Magnitude
+							local checkDist = math.min(distToMove, 2.0) -- 최대 2스터드 앞까지 검사
+							
+							-- [v4.25y] Dynamic Raycast Distance for Traps
+							-- 덫 내부가 좁아서 2스터드 앞을 검사하면 뒷벽(BackWall)에 걸려 멈춰버림.
+							-- 따라서 덫 근처에서는 검사 거리를 줄여서 더 깊이 들어갈 수 있게 함.
+							if targetFood and targetFood.Name == "CatTrap" then
+								-- 입구 근처(3스터드 이내)에서는 검사 거리를 0.5스터드로 단축
+								if distToMove < 3.0 then
+									checkDist = math.min(distToMove, 0.5)
+								end
+							end
+							
+							-- [v4.25u] Raycast 높이 상향 (바닥 턱 걸림 방지) & Food 무시
+							local rayOrigin = currentPos + Vector3.new(0, 0.5, 0)
+							local blocked = false
+							
+							-- 단일 레이캐스트
+							local hitResult = workspace:Raycast(rayOrigin, flatDir.Unit * checkDist, obstacleRayParams)
+							
+							if hitResult then
+								-- 1. PartEnter(Open) 통과
+								if hitResult.Instance.Name == "PartEnter" and hitResult.Instance.CanCollide == false then
+									blocked = false
+								-- 2. Target Food의 Descendant
+								elseif targetFood and hitResult.Instance:IsDescendantOf(targetFood) then
+									if targetFood.Name == "CatTrap" then
+										-- 입구/바닥은 통과
+										if hitResult.Instance.Name == "PartEnter" or hitResult.Instance.Name == "TrapFloor" then
+											blocked = false
+										elseif hitResult.Normal.Y > 0.5 then
+											blocked = false
+										else
+											blocked = true -- 벽
+										end
+									else
+										blocked = false -- 일반 음식
+									end
+								else
+									blocked = true -- 기타 장애물
+								end
+							end
+
+							if not blocked then
+								-- Move Step
+								local dir = flatDir.Unit
+								local step = speed * TICK_RATE
+								nextXZ = currentPos + dir * step
+							else
+								-- blocked -> 제자리 멈춤 (미끄러짐 방지)
+								nextXZ = currentPos
+							end
 							
 							-- Rotation
-								local lookCF = CFrame.lookAt(currentPos, Vector3.new(foodPos.X, currentPos.Y, foodPos.Z))
-								logicRotation = lookCF.Rotation -- [v4.25b] Save only to logicRotation
+							local lookCF = CFrame.lookAt(currentPos, Vector3.new(foodPos.X, currentPos.Y, foodPos.Z))
+							logicRotation = lookCF.Rotation 
 							
 							-- [v3.9] Update WorldPosition for accuracy
 							targetAtt.WorldPosition = foodPos
-						end
-						end
+							
+							-- [v4.25m] 도착 판정 (먹기 시작)
+							local distToFoodActual = (foodPos - currentPos).Magnitude
+							if distToFoodActual < 1.8 then
+								if targetDebugPart then targetDebugPart:Destroy(); targetDebugPart = nil end
+								
+								-- [v4.23n] Final Existence Check
+								if not targetFood or not targetFood.Parent then
+									transitionToIdle("FoodDespawnedAtLastMoment")
+								elseif FoodClaims[targetFood] == catId then
+									state = "Eating"
+									enteredEntrance = false 
+									idleTimer = 0
+									
+									-- [v4.2] Set Exclusive Eating Attribute
+									targetFood:SetAttribute("EatingBy", catId)
+									print(string.format("[AI] %s STARTED EATING %s (%s) -> EatingBy Locked", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+									
+									-- [v4.3] Disable Pickup for players
+									local cd = targetFood:FindFirstChildOfClass("ClickDetector")
+									if cd then cd.MaxActivationDistance = 0 end
+									
+									-- [v4.25c] Restored targeting beam cleanup
+									targetBeam.Enabled = false
+									
+									-- [VISUAL FEEDBACK]
+									local heartGUI = Instance.new("BillboardGui")
+									heartGUI.Name = "HappyHeart"
+									heartGUI.Size = UDim2.new(2, 0, 2, 0)
+									heartGUI.Adornee = head
+									heartGUI.StudsOffset = Vector3.new(0, 2, 0)
+									heartGUI.Parent = head
+									
+									local label = Instance.new("TextLabel")
+									label.BackgroundTransparency = 1
+									label.Size = UDim2.new(1, 0, 1, 0)
+									label.Text = "❤️"
+									label.TextScaled = true
+									label.Parent = heartGUI
+									
+									task.delay(2.5, function()
+										if heartGUI then heartGUI:Destroy() end
+									end)
+								else
+									transitionToIdle("ClaimLostAtLastMoment")
+								end
+							end
 					end
-				end
+				end -- [v4.18] Close searchTimer
+			end
 			elseif state == "Eating" then
 				idleTimer += TICK_RATE 
 				
@@ -2232,8 +2430,15 @@ function MapGenerator.SpawnCat(locationCF, parent)
 				
 				-- [v4.23z] Reverted to 5s (Middle ground)
 				if idleTimer >= 5.0 and targetFood and targetFood.Parent and FoodClaims[targetFood] == catId then
-					print(string.format("[AI] %s DESTROYING FOOD: %s (%s)", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
-					targetFood:Destroy()
+					print(string.format("[AI] %s FINISHED EATING %s (%s)", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+					
+					-- [v4.25m] CatTrap인 경우 파괴하지 않고 포획 신호 전달
+					if targetFood.Name == "CatTrap" then
+						targetFood:SetAttribute("CaptureSignal", catId)
+					else
+						targetFood:Destroy()
+					end
+					
 					FoodClaims[targetFood] = nil -- Clean memory
 				end
 				

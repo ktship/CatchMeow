@@ -259,7 +259,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 				rotation = CFrame.Angles(0, ry, 0)
 			end
 			
-			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 2, 0)) -- Lift slightly (Y=4 setting was mentioned earlier, but grounded is better)
+			trapModel:PivotTo(CFrame.new(position) * rotation * CFrame.new(0, 1.8, 0)) -- 높이 조정 (0.2 낮춤)
 			
 			-- [Fix] Enable Interaction (E key) - 사용자가 비활성화 요청 (470)
 			-- local prompt = trapModel:FindFirstChildWhichIsA("ProximityPrompt", true)
@@ -285,19 +285,33 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 	end
 	
 	-- [New] Bait Placement (미끼 놓기)
-	-- 클릭된 대상이 CatTrap의 일부이고, 아이템이 'Bungeoppang' 또는 'CatTreat'인 경우
-	if hitInstance and (itemId == "Bungeoppang" or itemId == "CatTreat") then
-		local trapModel = hitInstance:FindFirstAncestor("CatTrap")
+	-- 아이템이 'Bungeoppang' 또는 'CatTreat'인 경우 덫에 설치 시도
+	if itemId == "Bungeoppang" or itemId == "CatTreat" then
+		-- 1. 클릭된 대상(hitInstance)이 덫인지 확인
+		local trapModel = hitInstance and hitInstance:FindFirstAncestor("CatTrap")
+		
+		-- 2. 직접 클릭하지 않았다면 주변 10스터드 이내의 가장 가까운 덫 탐색
+		if not trapModel then
+			local minDist = 10
+			for _, obj in ipairs(workspace:GetChildren()) do
+				if obj.Name == "CatTrap" and obj:IsA("Model") then
+					local trapPos = obj:GetPivot().Position
+					local dist = (trapPos - position).Magnitude
+					if dist < minDist then
+						minDist = dist
+						trapModel = obj
+					end
+				end
+			end
+		end
+
 		if trapModel then
-			-- Trap이 이미 무언가(고양이 등)를 잡고 있는지 확인하려면?
 			-- 일단 Setting 상태일 때만 미끼를 놓을 수 있게 제한
 			local currentState = trapModel:GetAttribute("TargetState")
 			if currentState == "Setting" then
-				print("[InventoryManager] Placing " .. itemId .. " as bait in CatTrap!")
+				print("[InventoryManager] Snapping " .. itemId .. " as bait into CatTrap!")
 				
-				-- CatTrapHandler에 미끼 추가 요청 (속성 변경 등)
-				-- 하지만 CatTrapHandler는 ServerScriptService에 있으므로 직접 접근 불가
-				-- 대신 TrapModel에 Attribute를 설정하여 Handler가 감지하게 함
+				-- 관리를 위해 Attribute 설정 (CatTrapHandler가 시각화 및 로직 처리)
 				trapModel:SetAttribute("BaitItem", itemId)
 				
 				-- 인벤토리에서 제거
@@ -306,7 +320,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 					table.remove(inv, slotIndex)
 				end
 				updateEvent:FireClient(player, inv)
-				return
+				return -- 월드 아이템 생성 스킵
 			end
 		end
 	end

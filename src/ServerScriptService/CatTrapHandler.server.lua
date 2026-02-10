@@ -214,10 +214,10 @@ function CatTrap:SetupInteraction()
 	-- 2. Highlight 추가 (호버 피드백)
 	local hl = model:FindFirstChild("PickupHighlight") or Instance.new("Highlight")
 	hl.Name = "PickupHighlight"
-	hl.FillTransparency = 1
+	hl.FillTransparency = 0.7 -- 살짝 채워서 더 눈에 띄게
 	hl.OutlineTransparency = 0
-	hl.OutlineColor = Color3.fromRGB(255, 255, 100)
-	hl.FillColor = Color3.fromRGB(255, 255, 150)
+	hl.OutlineColor = Color3.fromRGB(255, 220, 0) -- 더 밝은 노란색
+	hl.FillColor = Color3.fromRGB(255, 255, 100)
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.Adornee = model
 	hl.Enabled = false
@@ -446,6 +446,13 @@ function CatTrap:PerformCapture(targetCatId)
 			weld.Part1 = torso
 			weld.Parent = torso
 			-- print("[CatTrap] NPC Welded to Trap.")
+		end
+		
+		-- [호버 하이라이트 수정] 포획된 고양이가 ClickDetector를 가리지 않도록
+		for _, desc in ipairs(targetCatModel:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				desc.CanQuery = false
+			end
 		end
 	else
 		warn("[CatTrap] Capture Signal received but NO CAT FOUND in region! Closing trap anyway.")

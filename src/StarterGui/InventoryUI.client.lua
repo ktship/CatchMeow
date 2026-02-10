@@ -141,6 +141,18 @@ hintCorner.Parent = useModeHint
 -- 3D 월드 프리뷰 모델 (마우스 위치에 따라 지형 위에 표시)
 local previewModel = nil
 
+-- [헬퍼] 투명도 설정 함수 (중복 제거)
+local function setTransparency(obj, t)
+	if obj:IsA("BasePart") then
+		obj.Transparency = t
+	end
+	for _, child in ipairs(obj:GetDescendants()) do
+		if child:IsA("BasePart") or child:IsA("Decal") then
+			child.Transparency = t
+		end
+	end
+end
+
 -- 3D 프리뷰 아이템 생성 함수
 local function createPreviewModel(itemId)
 	-- 기존 프리뷰 제거
@@ -168,24 +180,6 @@ local function createPreviewModel(itemId)
 		highlight.FillColor = Color3.fromRGB(255, 255, 150)
 		highlight.OutlineTransparency = 0
 		highlight.OutlineColor = Color3.fromRGB(255, 255, 100) -- 밝은 노란색
-		highlight.Parent = part
-		
-		previewModel = part
-	elseif itemId == "CatTreat" then
-		local part = Instance.new("Part")
-		part.Name = "ItemPreview"
-		part.Size = Vector3.new(0.5, 0.3, 0.5)
-		part.Color = Color3.fromRGB(255, 150, 100)
-		part.Material = Enum.Material.SmoothPlastic
-		part.Anchored = true
-		part.CanCollide = false
-		part.Parent = workspace
-		
-		local highlight = Instance.new("Highlight")
-		highlight.FillTransparency = 0.5
-		highlight.FillColor = Color3.fromRGB(255, 200, 150)
-		highlight.OutlineTransparency = 0
-		highlight.OutlineColor = Color3.fromRGB(255, 200, 100)
 		highlight.Parent = part
 		
 		previewModel = part
@@ -243,7 +237,7 @@ local function createPreviewModel(itemId)
 			highlight.Parent = model
 			
 			previewModel = model
-			print("[InventoryUI] Created Preview Model: " .. tostring(previewModel))
+			-- print("[InventoryUI] Created Preview Model: " .. tostring(previewModel))
 			
 			-- [v4.23s] Visual Debug: Preview is GREEN
 			local highlight = Instance.new("Highlight")
@@ -256,7 +250,7 @@ local function createPreviewModel(itemId)
 			if handle then
 				-- 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
 				handle.CFrame = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
-				print("[InventoryUI] Preview Init Rotation: " .. tostring(handle.Orientation))
+				-- print("[InventoryUI] Preview Init Rotation: " .. tostring(handle.Orientation))
 			end
 		else
 			-- Fallback
@@ -357,7 +351,7 @@ end
 -- 프리뷰 제거 함수
 local function destroyPreviewModel()
 	if previewModel then
-		print("[InventoryUI] Destroying Preview Model: " .. tostring(previewModel))
+		-- print("[InventoryUI] Destroying Preview Model: " .. tostring(previewModel))
 		previewModel:Destroy()
 		previewModel = nil
 	end
@@ -484,7 +478,7 @@ RunService.RenderStepped:Connect(function()
 				end
 			end
 			
-			local isBait = (currentItemId == "Bungeoppang" or currentItemId == "CatTreat")
+			local isBait = (currentItemId == "Bungeoppang")
 			updateTrapHighlight(isBait, trapModel)
 			
 			-- [충돌 감지] 다른 오브젝트와 겹치는지 확인
@@ -540,35 +534,13 @@ RunService.RenderStepped:Connect(function()
 				previewModel.CFrame = CFrame.new(targetPos) * rotation
 			end
 			
-			-- 투명도 설정 함수 (보임)
-			local function setTransparency(obj, t)
-				if obj:IsA("BasePart") then
-					obj.Transparency = t
-				end
-				for _, child in ipairs(obj:GetDescendants()) do
-					if child:IsA("BasePart") or child:IsA("Decal") then
-						child.Transparency = t
-					end
-				end
-			end
 			setTransparency(previewModel, 0)
 			
 		else
-			-- [v4.25d] 허공일 때 하이라이트 끄기
+			-- [허공] 하이라이트 끄기 + 프리뷰 숨김
 			if _G.BaitHighlight then _G.BaitHighlight.Enabled = false end
-			local function setTransparency(obj, t)
-				if obj:IsA("BasePart") then
-					obj.Transparency = t
-				end
-				for _, child in ipairs(obj:GetDescendants()) do
-					if child:IsA("BasePart") or child:IsA("Decal") then
-						child.Transparency = t
-					end
-				end
-			end
-			
 			if previewModel then
-				setTransparency(previewModel, 1) -- 숨김
+				setTransparency(previewModel, 1)
 			end
 		end
 	end
@@ -579,7 +551,7 @@ local function createSlot(index, itemId, count)
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then return end
 	
-	print("[InventoryUI] Creating slot for " .. itemId)
+	-- print("[InventoryUI] Creating slot for " .. itemId)
 	
 	local slot = Instance.new("TextButton")
 	slot.Name = "Slot_" .. index
@@ -603,7 +575,7 @@ local function createSlot(index, itemId, count)
 	slotViewport.Interactable = false
 	slotViewport.Parent = slot
 	
-	print("[InventoryUI] ViewportFrame created. Parent: " .. tostring(slotViewport.Parent))
+	-- print("[InventoryUI] ViewportFrame created. Parent: " .. tostring(slotViewport.Parent))
 	
 	local slotCamera = Instance.new("Camera")
 	slotCamera.FieldOfView = 50 -- 조금 더 넓게
@@ -629,12 +601,6 @@ local function createSlot(index, itemId, count)
 		part.Material = Enum.Material.Wood
 		-- 대각선으로 기울여서 잘 보이게
 		part.CFrame = CFrame.Angles(math.rad(30), math.rad(45), math.rad(20))
-		part.Parent = slotViewport
-	elseif itemId == "CatTreat" then
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(1.5, 1, 1.5) -- 3배 확대
-		part.Color = Color3.fromRGB(255, 150, 100)
-		part.Material = Enum.Material.SmoothPlastic
 		part.Parent = slotViewport
 	elseif itemId == "SpeedBoost" then
 		local part = Instance.new("Part")

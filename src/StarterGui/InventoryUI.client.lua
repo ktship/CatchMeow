@@ -10,6 +10,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local mouse = player:GetMouse()
 local ItemData = require(ReplicatedStorage:WaitForChild("ItemData"))
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
 local events = ReplicatedStorage:WaitForChild("Events")
 local updateEvent = events:WaitForChild("UpdateInventory")
@@ -629,16 +630,16 @@ local function createSlot(index, itemId, count)
 			end
 
 			if model:IsA("Model") then
-				print("[InventoryUI] Valid Bungeoppang Model found")
+				if Config.Debug and Config.Debug.ShowLogs then print("[InventoryUI] Valid Bungeoppang Model found") end
 				model.Name = "InventoryItem"
 				model:PivotTo(CFrame.new(0,0,0) * CFrame.Angles(math.rad(-20), math.rad(45), 0))
 				model.Parent = slotViewport
 			elseif model:IsA("Accessory") then
-				print("[InventoryUI] Valid Bungeoppang Accessory found")
+				if Config.Debug and Config.Debug.ShowLogs then print("[InventoryUI] Valid Bungeoppang Accessory found") end
 				local handle = model:FindFirstChild("Handle") or model:FindFirstChildWhichIsA("BasePart")
 				
 				if handle then
-					print("[InventoryUI] Handle found: " .. handle.Name)
+					if Config.Debug and Config.Debug.ShowLogs then print("[InventoryUI] Handle found: " .. handle.Name) end
 					
 					-- 액세서리에서 핸들만 추출 (Accessory 동작 방지)
 					handle.Name = "InventoryItem"
@@ -990,9 +991,11 @@ end
 -- createDebugUI()
 
 updateEvent.OnClientEvent:Connect(function(newInventory)
-	print("[InventoryUI] Received inventory update. Item Count: " .. #newInventory)
-	for i, v in ipairs(newInventory) do
-		print(" - Slot " .. i .. ": " .. v.ItemId .. " x" .. v.Count)
+	if Config.Debug and Config.Debug.ShowLogs then
+		print("[InventoryUI] Received inventory update. Item Count: " .. #newInventory)
+		for i, v in ipairs(newInventory) do
+			print(" - Slot " .. i .. ": " .. v.ItemId .. " x" .. v.Count)
+		end
 	end
 	inventory = newInventory
 	refreshUI()
@@ -1006,7 +1009,11 @@ updateEvent.OnClientEvent:Connect(function(newInventory)
 end)
 
 -- [Added] Request initial data immediately on load to prevent race conditions
-print("[InventoryUI] Requesting initial inventory...")
+if Config.Debug and Config.Debug.ShowLogs then
+	print("[InventoryUI] Requesting initial inventory...")
+end
 requestUpdateEvent:FireServer()
 
-print("[InventoryUI] Initialized")
+if Config.Debug and Config.Debug.ShowLogs then
+	print("[InventoryUI] Initialized")
+end

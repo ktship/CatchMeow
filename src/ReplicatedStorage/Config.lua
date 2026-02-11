@@ -57,4 +57,10 @@ Config.Game = {
 	RespawnTime = 3, -- 리스폰 시간
 }
 
+-- 디버그 설정
+Config.Debug = {
+	ShowLogs = false, -- 일반 로그 출력 여부 (InventoryManager, MapGenerator 등)
+	ShowDialogueLogs = true, -- 대화 시스템 로그는 켜둠 (개발 중이므로)
+}
+
 return Config

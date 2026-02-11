@@ -1,5 +1,6 @@
 local InsertService = game:GetService("InsertService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
 -- Asset Table
 local ASSETS_TO_LOAD = {
@@ -32,7 +33,9 @@ end
 
 for _, info in ipairs(ASSETS_TO_LOAD) do
 	if assetsFolder:FindFirstChild(info.Name) then
-		print("[AssetLoader] Found existing '" .. info.Name .. "'. Skipping.")
+		if Config.Debug and Config.Debug.ShowLogs then
+			print("[AssetLoader] Found existing '" .. info.Name .. "'. Skipping.")
+		end
 		continue
 	end
 	
@@ -72,10 +75,14 @@ for _, info in ipairs(ASSETS_TO_LOAD) do
 	end
 	
 	if not assetItem then
-		print("[AssetLoader] Creating fallback for '" .. info.Name .. "'")
+		if Config.Debug and Config.Debug.ShowLogs then
+			print("[AssetLoader] Creating fallback for '" .. info.Name .. "'")
+		end
 		local fallback = info.Fallback()
 		fallback.Parent = assetsFolder
 	end
 end
 
-print("[AssetLoader] Assets initialization complete.")
+if Config.Debug and Config.Debug.ShowLogs then
+	print("[AssetLoader] Assets initialization complete.")
+end

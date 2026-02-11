@@ -41,6 +41,24 @@ ItemData.Items = {
 		Price = 100,
 		Effect = "SummonTrap",
 	},
+	CatChuru = {
+		Id = "CatChuru",
+		Name = "고양이 츄르",
+		Icon = "🍭",
+		Description = "마약 같은 고양이 간식. 모든 고양이를 유혹할 수 있다.",
+		MaxStack = 5,
+		Price = 20,
+		Effect = "LureCatHigh",
+	},
+	CatCan = {
+		Id = "CatCan",
+		Name = "고양이 통조림",
+		Icon = "🥫",
+		Description = "배고픈 고양이를 위한 든든한 통조림.",
+		MaxStack = 5,
+		Price = 30,
+		Effect = "LureCatMedium",
+	},
 }
 
 function ItemData.GetItem(itemId)

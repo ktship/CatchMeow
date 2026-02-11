@@ -75,8 +75,26 @@ Tool.Activated:Connect(function()
 	
 	isTakingPhoto = true
 	
-	-- 1. 서버로 촬영 요청 (위치만 전송 - 기존 로직 유지)
-	Remote:FireServer(Mouse.Hit.Position)
+	-- [New] 촬영 대상 식별 (퀘스트용)
+	local target = Mouse.Target
+	local targetModel = nil
+	if target then
+		-- 모델 찾기 (NPC 등)
+		targetModel = target:FindFirstAncestor("Grandpa") -- 이름으로 명시적 검색
+		if not targetModel then
+			targetModel = target:FindFirstAncestor("Bungeoppang")
+		end
+		
+		-- 만약 이름으로 못 찾았으면 일반적 모델 검색
+		if not targetModel then
+			targetModel = target:FindFirstAncestorWhichIsA("Model")
+			-- 플레이어 자신은 제외
+			if targetModel == character then targetModel = nil end
+		end
+	end
+	
+	-- 1. 서버로 촬영 요청 (위치 + 타겟 전송)
+	Remote:FireServer(Mouse.Hit.Position, targetModel)
 	
 	-- 2. 갤러리 저장 요청 (클라이언트 -> 클라이언트)
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")

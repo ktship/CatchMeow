@@ -66,6 +66,14 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 				if colorName == target then
 					isMatch = true
 				end
+			elseif objectName == "Grandpa" or objectName == "Bungeoppang" then
+				-- [Quest] Grandpa Photo Quest
+				local currentState = player:GetAttribute("ST_Grandpa")
+				if currentState == "ST_PHOTO_NEED" then
+					player:SetAttribute("ST_Grandpa", "ST_PHOTO_SUCCESS")
+					print("[WeaponServer] Quest Progress: " .. player.Name .. " photographed " .. objectName .. ". State updated to ST_PHOTO_SUCCESS")
+					isMatch = true -- Feedback success
+				end
 			end
 			
 			-- [Added] Distance/Size Check
@@ -73,6 +81,8 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 			local maxDist = Config.Camera.VerificationDistance or 40
 			
 			if dist > maxDist then
+				-- If it's a quest item but too far, maybe don't invalidate completely but warn?
+				-- For now, consistent with existing logic:
 				isMatch = false
 				objectName = objectName .. " (Too Far/Small)"
 			end

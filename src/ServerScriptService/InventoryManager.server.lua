@@ -5,6 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ItemData = require(ReplicatedStorage:WaitForChild("ItemData"))
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
 -- 플레이어별 인벤토리 저장 (세션 기반, 저장 안 함)
 local PlayerInventories = {}
@@ -43,7 +44,9 @@ local function addItem(player, itemId, count)
 		return false 
 	end
 	
-	print("[InventoryManager] Adding " .. count .. "x " .. itemId .. " to " .. player.Name)
+	if Config.Debug and Config.Debug.ShowLogs then
+		print("[InventoryManager] Adding " .. count .. "x " .. itemId .. " to " .. player.Name)
+	end
 	
 	-- 기존 슬롯 찾기
 	for _, slot in ipairs(inv) do
@@ -62,11 +65,15 @@ local function addItem(player, itemId, count)
 	end
 	
 	-- 변경 사항 전송
-	print("[InventoryManager] Inventory updated for " .. player.Name)
+	if Config.Debug and Config.Debug.ShowLogs then
+		print("[InventoryManager] Inventory updated for " .. player.Name)
+	end
 	updateEvent:FireClient(player, inv)
 	
 	return true
 end
+	
+
 
 -- 아이템 사용
 local function useItem(player, slotIndex)
@@ -373,6 +380,16 @@ end)
 -- 외부에서 호출 가능하도록 모듈화
 _G.InventoryManager = {
 	AddItem = addItem,
+	HasItem = function(player, itemId)
+		local inv = PlayerInventories[player]
+		if not inv then return false end
+		for _, slot in ipairs(inv) do
+			if slot.ItemId == itemId and slot.Count > 0 then
+				return true
+			end
+		end
+		return false
+	end,
 	SetupWorldItem = setupWorldItem,
 }
 

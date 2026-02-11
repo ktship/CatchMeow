@@ -265,9 +265,10 @@ local function createPreviewModel(itemId)
 			previewModel = part
 		end
 	elseif itemId == "CatTrap" then
-		-- Assets에서 깨끗한 원본 복제 (Workspace는 폴백)
+		-- Items 폴더 우선 확인
+		local items = ReplicatedStorage:FindFirstChild("Items")
 		local assets = ReplicatedStorage:FindFirstChild("Assets")
-		local source = (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
+		local source = (items and items:FindFirstChild("CatTrap")) or (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
 		local part = nil
 		
 		if source then
@@ -707,9 +708,10 @@ local function createSlot(index, itemId, count)
 			part.Parent = slotViewport
 		end
 	elseif itemId == "CatTrap" then
-		-- Assets에서 깨끗한 원본을 가져와서 썸네일 생성
+		-- Items 폴더 우선 확인 (Viewport)
+		local items = ReplicatedStorage:FindFirstChild("Items")
 		local assets = ReplicatedStorage:FindFirstChild("Assets")
-		local source = (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
+		local source = (items and items:FindFirstChild("CatTrap")) or (assets and assets:FindFirstChild("CatTrap")) or workspace:FindFirstChild("CatTrap")
 		
 		if source then
 			local model = source:Clone()

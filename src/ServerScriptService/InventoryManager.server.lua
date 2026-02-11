@@ -253,10 +253,17 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 	if itemId == "CatTrap" then
 		print("Placing CatTrap at " .. tostring(position))
 		
-		local assets = ReplicatedStorage:FindFirstChild("Assets")
-		local trapSource = assets and assets:FindFirstChild("CatTrap")
+		-- [v4.28] CatTrap: ReplicatedStorage.Items에서 복제하여 배치
+		local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
+		local trapSource = itemsFolder and itemsFolder:FindFirstChild("CatTrap")
 		
-		-- [v4.28] 만약 Assets에 없으면 Workspace에서 찾아서 이동 (초기 1회)
+		-- Fallback: Assets 폴더 확인 (구조 호환성)
+		if not trapSource then
+			local assets = ReplicatedStorage:FindFirstChild("Assets")
+			trapSource = assets and assets:FindFirstChild("CatTrap")
+		end
+
+		-- Fallback: Workspace에서 찾아서 복사 (최후의 수단)
 		if not trapSource then
 			local wsTrap = workspace:FindFirstChild("CatTrap")
 			if wsTrap and wsTrap:IsA("Model") then
@@ -265,9 +272,16 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 				wsTrap:SetAttribute("BaitItem", nil)
 				wsTrap:SetAttribute("CaptureSignal", nil)
 				
-				wsTrap.Parent = assets
+				-- Items 폴더 생성 또는 사용
+				if not itemsFolder then
+					itemsFolder = Instance.new("Folder")
+					itemsFolder.Name = "Items"
+					itemsFolder.Parent = ReplicatedStorage
+				end
+				
+				wsTrap.Parent = itemsFolder
 				trapSource = wsTrap
-				print("[InventoryManager] Moved and Cleaned CatTrap from Workspace to Assets.")
+				print("[InventoryManager] Moved and Cleaned CatTrap from Workspace to Items.")
 			end
 		end
 

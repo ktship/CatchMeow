@@ -343,7 +343,9 @@ function CatTrap:AddBaitVisual(baitItemId)
 	if self.BaitModel then self.BaitModel:Destroy() end
 	
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	local sourceItem = assets and assets:FindFirstChild(baitItemId)
+	local items = ReplicatedStorage:FindFirstChild("Items")
+	
+	local sourceItem = (items and items:FindFirstChild(baitItemId)) or (assets and assets:FindFirstChild(baitItemId))
 	local baitPart = nil
 	
 	if sourceItem then

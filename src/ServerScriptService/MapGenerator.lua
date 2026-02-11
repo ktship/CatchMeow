@@ -81,6 +81,13 @@ end
 function MapGenerator.ClearMap()
 	local mapFolder = workspace:FindFirstChild("Map")
 	if mapFolder then mapFolder:Destroy() end
+	
+	-- [Added] Clean up any orphaned Grandpa NPCs in workspace
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if (obj.Name == "Grandpa" or obj.Name == "Grandpa2") and obj:IsA("Model") then
+			obj:Destroy()
+		end
+	end
 end
 
 -- 조명 설정 (눈부심 제거)
@@ -378,8 +385,8 @@ function MapGenerator.GenerateProcedural()
 			
 			-- [Added] Bench next to Blue House (Closer to Road, Aligned)
 			if spot.color.B > 0.9 and spot.color.R < 0.1 then
-				local benchZ = spot.z - 18
-				local benchX = spot.x - 22 -- Closer to road
+				local benchZ = spot.z - 20 -- Slightly further
+				local benchX = spot.x - 25 -- Slightly further from house
 				
 				local bench = createPart("Bench", Vector3.new(2, 1.5, 6), Vector3.new(benchX, y + 0.75, benchZ), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, mapFolder)
 				
@@ -389,10 +396,11 @@ function MapGenerator.GenerateProcedural()
 				local tangent = Vector3.new(s, 0, 1) -- Road Tangent
 				bench.CFrame = CFrame.lookAt(bench.Position, bench.Position + tangent)
 				
-				-- [Added] Grandfather NPC sitting on bench
-				-- Offset slightly up (seat surface + hip height). Bench Top is ~ y+1.5. Hips ~ +1.
-				local sitCF = bench.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(0, math.rad(-90), 0)
-				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
+				-- [Reverted] Remove Seat as it interferes with player. Use direct placement.
+				-- Offset: Y + HipHeight from seat center. 
+				-- Lifting up slightly (3.6) to avoid clipping with custom pose.
+				local sitOffset = CFrame.new(0, 3.6, 0) * CFrame.Angles(0, math.rad(-90), 0)
+				MapGenerator.SpawnGrandpa(bench.CFrame * sitOffset, mapFolder)
 			end
 			
 			-- [Added] Street Stall (Pojangmacha) near Red House
@@ -472,6 +480,8 @@ function MapGenerator.GenerateProcedural()
 		local catCF = CFrame.new(cx, groundY + 1, cz) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 		MapGenerator.SpawnCat(catCF, catsFolder)
 	end
+	
+	
 	
 	-- [Added] World Items (Disabled temporarily)
 	--[[
@@ -564,16 +574,13 @@ function MapGenerator.LoadMapFromData(mapData)
 				local bench = createPart("Bench", Vector3.new(2, 1.5, 6), Vector3.new(benchX, y + 0.75, benchZ), Color3.fromRGB(130, 90, 50), Enum.Material.Wood, mapFolder)
 				
 				-- Recalculate Slope (Config required)
-				local amp = Config.Map.Road.Amplitude
-				local freq = Config.Map.Road.Frequency
 				local s = amp * freq * math.cos(benchZ * freq)
 				local tangent = Vector3.new(s, 0, 1)
 				bench.CFrame = CFrame.lookAt(bench.Position, bench.Position + tangent)
 				
-				-- [Added] Grandfather NPC (Reconstruct)
-				local sitCF = bench.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(0, math.rad(-90), 0)
-				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
-				MapGenerator.SpawnGrandpa(sitCF, mapFolder)
+				-- [Moved] Spawn Grandpa sitting on this bench during reconstruction
+				local sitOffset = CFrame.new(0, 3.6, 0) * CFrame.Angles(0, math.rad(-90), 0)
+				MapGenerator.SpawnGrandpa(bench.CFrame * sitOffset, mapFolder)
 			end
 			
 			-- [Added] Street Stall (Reconstruct near Red House)
@@ -657,69 +664,73 @@ function MapGenerator.CreateTunnels(parent, mapSize)
 	createTunnel(halfSize - 5, getRoadX(halfSize - 5))
 end
 
-
-
--- 할아버지 NPC 생성 (Standard R6 Style)
-function MapGenerator.SpawnGrandpa(locationCF, parent)
-	local model = Instance.new("Model")
-	model.Name = "Grandpa"
-	model.Parent = parent
-	
-	-- Humanoid for "Character" look
-	local hum = Instance.new("Humanoid")
-	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None -- Hide Name
-	hum.Parent = model
-	
-	-- Colors
-	local skinColor = Color3.fromRGB(240, 200, 180)
-	local shirtColor = Color3.fromRGB(200, 200, 200)
-	local pantsColor = Color3.fromRGB(80, 70, 60)
-	local hairColor = Color3.fromRGB(150, 150, 150)
-	
-	-- Helper
-	local function makePart(name, size, color, cf)
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = size
-		p.Color = color
-		p.Material = Enum.Material.Plastic
-		p.Anchored = true
-		p.CanCollide = false
-		p.CFrame = locationCF * cf
-		p.Parent = model
-		return p
+-- [New] Helper for Sit Animation (Restored)
+local function playSitAnim(model)
+	local hum = model:FindFirstChild("Humanoid")
+	if hum then
+		local animator = hum:FindFirstChildOfClass("Animator")
+		if not animator then
+			animator = Instance.new("Animator")
+			animator.Parent = hum
+		end
+		
+		local anim = Instance.new("Animation")
+		anim.AnimationId = "rbxassetid://85845402274983" -- User Custom Pose
+		
+		local track = animator:LoadAnimation(anim)
+		track.Priority = Enum.AnimationPriority.Movement
+		track.Looped = true
+		track:Play()
 	end
+end
+
+
+
+
+
+-- [New] 할아버지 모델 별도 배치 (NPC 교체 아님)
+
+
+-- [New] Grandpa (Rigged Model) 배치 (CFrame 기반)
+function MapGenerator.SpawnGrandpa(locationCF, parent)
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local npcs = ReplicatedStorage:FindFirstChild("NPCs")
+	local source = npcs and npcs:FindFirstChild("Grandpa") -- Renamed from Grandpa2
 	
-	-- 1. Torso (2x2x1)
-	-- Pivot is center of bench seat (y+1.8). Torso Center is higher.
-	-- Bench Y is "Seat Surface". Torso Center is +1 (Half Torso).
-	local torso = makePart("Torso", Vector3.new(2, 2, 1), shirtColor, CFrame.new(0, 1.0, 0))
-	
-	-- 2. Head (1.25x1.25x1.25) + Mesh
-	local head = makePart("Head", Vector3.new(1, 1, 1), skinColor, CFrame.new(0, 2.5, 0))
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-	local face = Instance.new("Decal")
-	face.Texture = "rbxasset://textures/face.png"
-	face.Face = Enum.NormalId.Front
-	face.Parent = head
-	
-	-- Hair (Block Hat)
-	local hair = makePart("Hair", Vector3.new(1.3, 0.4, 1.3), hairColor, CFrame.new(0, 3.2, 0))
-	
-	-- 3. Arms (1x2x1)
-	makePart("Left Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(-1.5, 1.0, 0))
-	makePart("Right Arm", Vector3.new(1, 2, 1), shirtColor, CFrame.new(1.5, 1.0, 0))
-	
-	-- 4. Legs (1x2x1) - Sitting (Standard R6 Sit: Legs forward)
-	-- Torso Bottom is at 0.0 offset. Leg starts there.
-	-- Leg Center would be Z+1 (Forward), Y+0 (Level with Torso bottom? No slightly down?)
-	-- Actually: Hip is Torso Bottom. Leg is attached there.
-	-- If Leg is horizontal, Center is Z=1.
-	makePart("Left Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(-0.5, 0.0, -1.0) * CFrame.Angles(math.rad(-90), 0, 0))
-	makePart("Right Leg", Vector3.new(1, 2, 1), pantsColor, CFrame.new(0.5, 0.0, -1.0) * CFrame.Angles(math.rad(-90), 0, 0))
+	if source then
+		local model = source:Clone()
+		model.Name = "Grandpa" -- Renamed
+		model.Parent = parent 
+		
+		local hum = model:FindFirstChildOfClass("Humanoid")
+		if hum then
+			-- [Added] 머리 위 이름 숨김
+			hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			hum.Sit = true -- 상태 설정
+		end
+		
+		-- 1. Position NPC
+		model:PivotTo(locationCF)
+		
+		-- 2. Rigging (중요: HumanoidRootPart는 Anchor하여 고정, 팔다리는 Unanchor하여 애니메이션 허용)
+		for _, part in ipairs(model:GetDescendants()) do
+			if part:IsA("BasePart") then
+				if part.Name == "HumanoidRootPart" or part.Name == "Torso" then
+					part.Anchored = true -- 위치 고정
+				else
+					part.Anchored = false -- 애니메이션 관절 작동
+				end
+				part.CanCollide = false
+			end
+		end
+		
+		-- 3. Animation
+		playSitAnim(model)
+		
+		print("[MapGenerator] Spawned Grandpa (Rigged) at CFrame.")
+	else
+		warn("[MapGenerator] Grandpa model not found in ReplicatedStorage.NPCs")
+	end
 end
 
 -- 포장마차 생성

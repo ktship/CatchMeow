@@ -11,6 +11,11 @@ local NPCModules = {}
     - 현재 상황(인벤토리, 퀘스트 진행도)을 판단하여 적절한 대사를 출력합니다.
 ]=]
 function DialogueManager.StartDialogue(player, npcName)
+    -- [Maintained] Legacy support if needed, otherwise focus on Grandpa
+    if npcName == "Grandpa2" then
+        npcName = "Grandpa"
+    end
+    
     print("[DialogueManager] StartDialogue called for: " .. tostring(npcName))
 
     local npcDataFolder = ReplicatedStorage:FindFirstChild("DialogueSystem") and ReplicatedStorage.DialogueSystem:FindFirstChild("NPCData")

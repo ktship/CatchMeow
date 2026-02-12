@@ -9,31 +9,41 @@ local DialogueData = {
 			},
 			["DH_IDLE_2"] = {
 				Speaker = "Grandpa",
-				Text = "(힐끗 쳐다보면) 무슨 일인가?",
+				Text = "(힐끗 쳐다보며) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?\n(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?(힐끗 쳐다보면) 무슨 일인가?\nhrerwioerwjiorjeowjoiwerjieowrjioerwjoirewjioewrjioewrjiowerjoi",
 				Choices = {
-					{ Text = "혹시 이 근처에서 노란 고양이 못 보셨나요? 구조하러 왔거든요.", Next = "DH_IDLE_3" },
+					{ Text = "혹시 근처에서 노란 고양이 못 보셨나요?", Next = "DH_IDLE_3" },
 					{ Text = "아무것도 아니에요...", Next = "DH_IDLE_3_ALT1" },
 					{ Text = "뭐하세요?", Next = "DH_IDLE_3_ALT2" }
 				}
 			},
 			["DH_IDLE_3_ALT1"] = {
+				Speaker = "Player",
+				Text = "아무것도 아니에요...",
+				Next = "DH_IDLE_3_ALT1_1"
+			},
+			["DH_IDLE_3_ALT1_1"] = {
 				Speaker = "Grandpa",
-				Text = "별 싱거운 녀석 다 보겠네.",
+				Text = "참 싱거운 친구구먼.",
 				Next = nil -- 대화 종료
 			},
 			["DH_IDLE_3_ALT2"] = {
+				Speaker = "Player",
+				Text = "뭐하세요?",
+				Next = "DH_IDLE_3_ALT2_1"
+			},
+			["DH_IDLE_3_ALT2_1"] = {
 				Speaker = "Grandpa",
-				Text = "(먼 산을 보며) 보면 모르나? 그냥 앉아서 쉬는 중이지. 늙은이 쉬는 거 구경할 거 아니면 제 갈 길 가게나.",
+				Text = "(먼 산을 보며) 보면 모르나? 그냥 앉아서 쉬는 중이지.",
 				Next = nil
 			},
 			["DH_IDLE_3"] = {
 				Speaker = "Player",
-				Text = "혹시 이 근처에서 노란 고양이 못 보셨나요? 구조하러 왔거든요.",
+				Text = "혹시 이 근처에서 노란 고양이 못 보셨나요?",
 				Next = "DH_IDLE_4"
 			},
 			["DH_IDLE_4"] = {
 				Speaker = "Grandpa",
-				Text = "(귀찮은 듯) 노란 고양이? 이 동네에 고양이가 한둘이야? 그냥 노랗다는 말만 들어선 나도 몰라.",
+				Text = "(귀찮은 듯) 노란 고양이? 이 동네에 고양이가 한둘이 아니야. 모르겠어.",
 				Next = "DH_IDLE_5"
 			},
 			["DH_IDLE_5"] = {
@@ -43,8 +53,11 @@ local DialogueData = {
 			},
 			["DH_IDLE_6"] = {
 				Speaker = "Grandpa",
-				Text = "하트 점? 고놈들이 가만히 있어야 점이 있는지 보지. 정 찾고 싶으면 사진이라도 찍어와 봐. 그래야 누군지 알려줄 거 아닌가.",
+				Text = "하트 점? 글쎄... 정 찾고 싶으면 사진이라도 찍어와 봐. 아마 직접 보면 알겠지.",
 				SetState = "ST_PHOTO_NEED", -- 상태 변이 트리거
+				StartQuest = "FindYellowCat", -- [Added] 퀘스트 시작 트리거
+				NotificationTitle = "새로운 목표", 
+				Notification = "핑크색 하트 점이 있는 노란 고양이 사진 찍어오기", 
 				Next = nil
 			}
 		}
@@ -145,6 +158,8 @@ local DialogueData = {
 				Text = "(붕어빵 하나를 더 건네며) 붕어빵 하나면 부족할지 모르니 하나는 자네가 먹어도 좋고. 꼭 구조해주게나.",
 				Action = "GiveItem",
 				ItemID = "Bungeoppang",
+				NotificationTitle = "아이템 획득", -- [Added] 제목 분리
+				Notification = "붕어빵, 고양이 덫", 
 				Next = nil
 			}
 		}
@@ -176,6 +191,8 @@ local DialogueData = {
 			["DH_NONE_5"] = {
 				Speaker = "Player",
 				Text = "잘됐네요! 알려주셔서 고맙습니다!",
+				NotificationTitle = "새로운 목표", -- [Added] 제목 분리
+				Notification = "포장마차에서 붕어빵 구하기", 
 				Next = nil
 			}
 		}
@@ -212,6 +229,8 @@ local DialogueData = {
 			["DH_OBAIT_6"] = {
 				Speaker = "Grandpa",
 				Text = "허허, 그래 조심히 다녀오게나.",
+				NotificationTitle = "새로운 목표", -- [Added] 제목 분리
+				Notification = "상점에서 고양이 덫 구하기", 
 				Next = nil
 			}
 		}
@@ -233,6 +252,8 @@ local DialogueData = {
 			["DH_OTRAP_3"] = {
 				Speaker = "Player",
 				Text = "아, 맞다! 포장마차에서 붕어빵을 사야겠네요!",
+				NotificationTitle = "새로운 목표", -- [Added] 제목 분리
+				Notification = "붕어빵 구하기", 
 				Next = nil
 			}
 		}
@@ -254,6 +275,8 @@ local DialogueData = {
 			["DH_READY_3"] = {
 				Speaker = "Player",
 				Text = "네! 꼭 구조해서 올게요!",
+				NotificationTitle = "최종 목표", -- [Added] 제목 분리
+				Notification = "고양이 포획하기", 
 				Next = nil
 			}
 		}

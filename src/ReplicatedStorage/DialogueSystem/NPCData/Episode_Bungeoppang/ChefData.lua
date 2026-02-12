@@ -4,7 +4,7 @@ local DialogueData = {
 		Nodes = {
 			["DH_CHEF_1"] = {
 				Speaker = "Chef",
-				Text = "어서 오세요! 갓 구운 붕어빵 있습니다. 무엇을 도와드릴까요?",
+				Text = "어서 오세요, {PlayerName}님! 갓 구운 붕어빵 있습니다. 무엇을 도와드릴까요?",
 				Choices = {
 					{ Text = "붕어빵을 사고 싶어요.", Next = "DH_CHEF_SHOP_BAIT" },
 					{ Text = "길고양이 구조용 덫이 있나요?", Next = "DH_CHEF_SHOP_TRAP" },

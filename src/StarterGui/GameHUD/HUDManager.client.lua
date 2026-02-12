@@ -35,7 +35,7 @@ timerLabel.Parent = statusFrame
 
 local statsFrame = Instance.new("Frame")
 statsFrame.Size = UDim2.new(0, 250, 0, 80)
-statsFrame.Position = UDim2.new(0, 20, 1, -100)
+statsFrame.Position = UDim2.new(0, 80, 1, -100) -- [Modified] 퀘스트 버튼(60px) 우측으로 배치
 statsFrame.BackgroundTransparency = 0.5
 statsFrame.BackgroundColor3 = Color3.new(0, 0, 0)
 statsFrame.Parent = gui

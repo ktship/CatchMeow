@@ -15,8 +15,9 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 300, 0, 400)
-mainFrame.Position = UDim2.new(0.02, 0, 0.2, 0) -- 좌측 배치
+mainFrame.Size = UDim2.new(0, 280, 0.5, 0) -- [Modified] 높이를 화면 비율(50%)로 변경
+mainFrame.AnchorPoint = Vector2.new(0, 1) -- [Modified] 좌측 하단 기준
+mainFrame.Position = UDim2.new(0.02, 0, 1, -80) -- [Modified] 버튼 바로 위에 위치 (겹침 방지)
 mainFrame.BackgroundColor3 = Color3.fromRGB(255, 248, 240) -- [Apricot] 테마
 mainFrame.BackgroundTransparency = 0.1
 mainFrame.Visible = false -- 초기에는 숨김 (버튼이나 J키로 토글)
@@ -46,10 +47,10 @@ menuLayout.Parent = menuContainer
 local questButton = Instance.new("TextButton")
 questButton.Name = "QuestButton"
 questButton.Size = UDim2.new(0, 50, 0, 50)
-questButton.BackgroundColor3 = Color3.fromRGB(255, 240, 220) -- [Apricot] 밝은 살구색 배경
+questButton.BackgroundColor3 = Color3.fromRGB(180, 110, 70) -- [Apricot] 더 진한 갈색/오렌지 (아이콘 대비)
 questButton.BackgroundTransparency = 0 -- 배경 불투명하게 변경 (잘 보이도록)
 questButton.Text = "📜" -- 이모지 아이콘
-questButton.TextSize = 30
+questButton.TextSize = 25 -- [Modified] 아이콘 크기 조금 줄임 (30 -> 25)
 questButton.LayoutOrder = 1
 questButton.Parent = menuContainer
 

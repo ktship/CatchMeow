@@ -40,12 +40,12 @@ screenGui.Parent = playerGui
 -- 인벤토리 버튼 (우측 중단)
 local invButton = Instance.new("TextButton")
 invButton.Name = "InventoryButton"
-invButton.Size = UDim2.new(0, 60, 0, 60)
-invButton.Position = UDim2.new(1, -80, 0.8, -30) -- [v4.25j] 우측 하단으로 고정 위치 이동
-invButton.AnchorPoint = Vector2.new(0, 0)
-invButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+invButton.Size = UDim2.new(0, 50, 0, 50) -- [Modified] 퀘스트 버튼과 크기 맞춤 (60 -> 50)
+invButton.Position = UDim2.new(0, 90, 1, -20) -- [Modified] 좌측 하단 퀘스트 버튼 옆으로 이동
+invButton.AnchorPoint = Vector2.new(0, 1) -- [Modified] 좌측 하단 기준
+invButton.BackgroundColor3 = Color3.fromRGB(180, 110, 70) -- [Modified] 퀘스트 버튼과 동일한 Apricot 테마
 invButton.Text = "🎒"
-invButton.TextSize = 32
+invButton.TextSize = 25 -- [Modified] 텍스트 크기 통일 (32 -> 25)
 invButton.Font = Enum.Font.GothamBold
 invButton.TextColor3 = Color3.new(1, 1, 1)
 invButton.Parent = screenGui
@@ -74,9 +74,9 @@ local function setInventoryVisible(visible)
 	isOpen = visible
 	invWindow.Visible = isOpen
 	if isOpen then
-		invButton.BackgroundColor3 = Color3.fromRGB(100, 100, 150) -- 열림 (강조)
+		invButton.BackgroundColor3 = Color3.fromRGB(200, 130, 90) -- 열림 (조금 더 밝게 강조)
 	else
-		invButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80) -- 닫힘 (기본)
+		invButton.BackgroundColor3 = Color3.fromRGB(180, 110, 70) -- 닫힘 (기본 Apricot)
 	end
 end
 

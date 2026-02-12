@@ -77,10 +77,23 @@ nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 nameStroke.Parent = nameLabel
 
 -- 대사 텍스트
+-- 대사 텍스트 스크롤 프레임 [Added]
+local textScroll = Instance.new("ScrollingFrame")
+textScroll.Name = "TextScroll"
+textScroll.Size = UDim2.new(0.94, 0, 0.75, 0)
+textScroll.Position = UDim2.new(0.03, 0, 0.2, 0)
+textScroll.BackgroundTransparency = 1
+textScroll.BorderSizePixel = 0
+textScroll.ScrollBarThickness = 6
+textScroll.ScrollBarImageColor3 = Color3.fromRGB(255, 200, 150) -- [Apricot] 스크롤바 색상
+textScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+textScroll.AutomaticCanvasSize = Enum.AutomaticSize.None -- [Modified] 수동 제어
+textScroll.Parent = mainFrame
+
 local textLabel = Instance.new("TextLabel")
 textLabel.Name = "DialogueText"
-textLabel.Size = UDim2.new(0.94, 0, 0.75, 0)
-textLabel.Position = UDim2.new(0.03, 0, 0.2, 0)
+textLabel.Size = UDim2.new(1, -10, 0, 0) -- [Modified] 높이는 자동 조절 (AutomaticSize)
+textLabel.AutomaticSize = Enum.AutomaticSize.Y
 textLabel.BackgroundTransparency = 1
 textLabel.TextColor3 = Color3.fromRGB(90, 60, 50) -- [Apricot] 따뜻한 딥 브라운 텍스트
 textLabel.TextSize = 26
@@ -89,7 +102,15 @@ textLabel.TextWrapped = true
 textLabel.TextXAlignment = Enum.TextXAlignment.Left
 textLabel.TextYAlignment = Enum.TextYAlignment.Top
 textLabel.Text = ""
-textLabel.Parent = mainFrame
+textLabel.Parent = textScroll -- [Modified] 스크롤 프레임 안에 배치
+
+-- [Added] 텍스트 크기에 따라 스크롤 영역 자동 업데이트
+textLabel:GetPropertyChangedSignal("TextBounds"):Connect(function()
+	textScroll.CanvasSize = UDim2.new(0, 0, 0, textLabel.TextBounds.Y + 30) -- 여유분 30px
+	-- 자동 스크롤 (선택 사항: 텍스트가 길어지면 맨 아래로? 아니면 맨 위 유지?)
+	-- 보통 대화창은 읽으면서 내려가므로, 사용자가 스크롤하도록 둠.
+	-- 단, 처음 텍스트가 세팅될 때는 위치를 초기화하는 게 좋음 (typeText에서 처리)
+end)
 
 -- [Premium] 선택지 컨테이너 및 디자인
 local choiceContainer = Instance.new("CanvasGroup") -- [Premium] 그룹 페이딩을 위해 CanvasGroup 사용
@@ -181,6 +202,7 @@ local currentNode = nil
 local hiddenGuis = {} -- [Added] 대화 중 숨겨진 GUI 목록 저장
 local disabledPrompts = {} -- [Added] 대화 중 비활성화된 ProximityPrompt 목록 저장
 local mainTween = nil
+local mainPositionTween = nil -- [Added] 대화창 위치 이동용 트윈
 local choiceFadeTween = nil -- [Added] 선택지 페이드용 트윈
 local isChoiceSelecting = false -- [Added] 중복 클릭 방지용 플래그
 local isTyping = false -- [Added] 현재 타이핑 중인지 확인
@@ -224,7 +246,11 @@ local function typeText(targetText)
 	isTyping = true
 	skipTyping = false
 	textLabel.MaxVisibleGraphemes = 0
-	textLabel.Text = targetText
+	textLabel.Text = targetText -- 이 시점에 TextBounds 이벤트 발생하여 CanvasSize 업데이트됨
+	
+	-- 스크롤 위치 초기화 (맨 위로)
+	textScroll.CanvasPosition = Vector2.new(0, 0)
+	
 	local length = utf8.len(targetText)
 	
 	for i = 1, length do
@@ -364,10 +390,17 @@ local function showCurrentNode()
 	typeText(processedText)
 	
 	if currentNode.Choices then
+		-- [Added] 선택지가 있을 때: 대화창을 위로 올림
+		if mainPositionTween then mainPositionTween:Cancel() end
+		mainPositionTween = TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.1, 0, 0.55, 0) -- 위로 이동
+		})
+		mainPositionTween:Play()
+
 		nextIndicator.Visible = false
 		choiceContainer.Visible = true
 		choiceContainer.GroupTransparency = 1 -- 페이드 시작을 위해 투명화
-		choiceContainer.Position = UDim2.new(0.5, 0, 0.65, 0) -- 애니메이션 시작 위치 (대화창 위)
+		choiceContainer.Position = UDim2.new(0.5, 0, 0.9, 0) -- [Modified] 애니메이션 시작 위치 (대화창 아래)
 		
 		for _, child in ipairs(choiceContainer:GetChildren()) do
 			if not child:IsA("UIListLayout") then child:Destroy() end
@@ -381,32 +414,44 @@ local function showCurrentNode()
 			local btn = Instance.new("TextButton")
 			btn.Name = "ChoiceBtn" .. i
 			btn.Size = UDim2.new(1, 0, 0, 55)
-			btn.BackgroundColor3 = Color3.fromRGB(255, 250, 245) -- [Apricot] 매우 연한 피치
-			btn.TextColor3 = Color3.fromRGB(100, 70, 60) -- [Apricot] 부드러운 갈색 텍스트
-			btn.TextSize = 24
-			btn.Font = Enum.Font.GothamSemibold
-			btn.Text = choice.Text
+			btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- [Modified] 완전 흰색 배경
+			btn.TextColor3 = Color3.fromRGB(80, 50, 40) -- [Modified] 진한 갈색 텍스트
+			btn.TextSize = 22
+			btn.Font = Enum.Font.GothamMedium -- [Modified] Medium 폰트
+			btn.Text = "  ▶  " .. choice.Text -- [Modified] 화살표 아이콘 추가
+			btn.TextXAlignment = Enum.TextXAlignment.Left -- [Modified] 왼쪽 정렬
 			btn.AutoButtonColor = false
 			btn.Parent = choiceContainer
+			
+			-- [Added] 텍스트 여백
+			local btnPadding = Instance.new("UIPadding")
+			btnPadding.PaddingLeft = UDim.new(0, 20)
+			btnPadding.Parent = btn
 
 			local btnCorner = Instance.new("UICorner")
 			btnCorner.CornerRadius = UDim.new(0, 12)
 			btnCorner.Parent = btn
 
 			local btnStroke = Instance.new("UIStroke")
-			btnStroke.Thickness = 1.2
-			btnStroke.Color = Color3.fromRGB(255, 180, 130) -- [Apricot] 중간 오렌지 테두리
-			btnStroke.Transparency = 0.6
+			btnStroke.Thickness = 2.5 -- [Modified] 두꺼운 테두리
+			btnStroke.Color = Color3.fromRGB(255, 210, 80) -- [Modified] 밝은 오렌지/옐로우 테두리
+			btnStroke.Transparency = 0
+			btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			btnStroke.Parent = btn
-
+			
+			-- [Added] 그림자 효과 (버튼 아래에 위치) 
+			-- 간단히 Stroke의 두께감으로 표현하거나, 별도 Shadow 프레임 사용 가능
+			-- 여기서는 깔끔함을 위해 Stroke 위주로 하되, 버튼 자체에 DropShadow 패딩을 줄 수도 있음.
+			
 			-- [Premium] 버튼 호버 애니메이션
 			btn.MouseEnter:Connect(function()
-				TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 235, 220), Size = UDim2.new(1.05, 0, 0, 55)}):Play()
-				TweenService:Create(btnStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(255, 160, 100), Transparency = 0}):Play()
+				-- 호버 시 약간 줌인 + 배경색 미색
+				TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 250, 240)}):Play()
+				TweenService:Create(btnStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(255, 180, 50)}):Play() -- 테두리 진해짐
 			end)
 			btn.MouseLeave:Connect(function()
-				TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 250, 245), Size = UDim2.new(1, 0, 0, 55)}):Play()
-				TweenService:Create(btnStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(255, 180, 130), Transparency = 0.6}):Play()
+				TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+				TweenService:Create(btnStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(255, 210, 80)}):Play()
 			end)
 			
 			btn.MouseButton1Click:Connect(function()
@@ -430,10 +475,17 @@ local function showCurrentNode()
 		if choiceFadeTween then choiceFadeTween:Cancel() end
 		choiceFadeTween = TweenService:Create(choiceContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 			GroupTransparency = 0,
-			Position = UDim2.new(0.5, 0, 0.6, 0) -- 대화창(0.68) 바로 위인 0.6 위치까지 올라옴
+			Position = UDim2.new(0.5, 0, 0.85, 0) -- [Modified] 대화창(0.55 + 0.28 = 0.83) 바로 아래인 0.85 위치까지 올라옴
 		})
 		choiceFadeTween:Play()
 	else
+		-- [Added] 선택지가 없을 때: 대화창을 원래 위치(아래)로 내림
+		if mainPositionTween then mainPositionTween:Cancel() end
+		mainPositionTween = TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.1, 0, 0.68, 0) -- 원래 위치 복귀
+		})
+		mainPositionTween:Play()
+
 		choiceContainer.Visible = false
 		nextIndicator.Visible = true
 	end
@@ -532,7 +584,7 @@ local function startDialogue(npcName, npcModel)
 		
 		if mainTween then mainTween:Cancel() end
 		mainTween = TweenService:Create(mainFrame, TweenInfo.new(0.8, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.1, 0, 0.68, 0), -- [Optimized] 0.6 -> 0.68 (하단 밀착)
+			Position = UDim2.new(0.1, 0, 0.68, 0), -- [Modified] 0.55 -> 0.68 (다시 하단으로 복귀)
 			BackgroundTransparency = 0.2
 		})
 		mainTween:Play()

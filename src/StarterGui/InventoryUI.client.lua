@@ -37,88 +37,190 @@ screenGui.Name = "InventoryGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
+-- [Theme Colors] Sunny Orange (QuestUI와 통일)
+local Colors = {
+	Primary = Color3.fromRGB(255, 170, 0), -- 진한 오렌지 (헤더, 강조)
+	Background = Color3.fromRGB(245, 240, 230), -- [Modified] 조금 더 진한 크림색
+	Card = Color3.fromRGB(255, 255, 255), -- 흰색 (카드, 슬롯)
+	Stroke = Color3.fromRGB(254, 230, 133), -- [Modified] 사용자 요청 테두리색
+	TextTitle = Color3.new(1, 1, 1), -- 헤더 타이틀 (흰색)
+	TextBody = Color3.fromRGB(140, 100, 80), -- 중간 갈색
+	TextHighlight = Color3.fromRGB(255, 140, 0), -- 오렌지 텍스트
+	CloseBtn = Color3.fromRGB(255, 255, 255), -- 닫기 버튼
+}
+
+-- 인벤토리 버튼 (우측 중단)
 -- 인벤토리 버튼 (우측 중단)
 local invButton = Instance.new("TextButton")
 invButton.Name = "InventoryButton"
-invButton.Size = UDim2.new(0, 50, 0, 50) -- [Modified] 퀘스트 버튼과 크기 맞춤 (60 -> 50)
-invButton.Position = UDim2.new(0, 90, 1, -20) -- [Modified] 좌측 하단 퀘스트 버튼 옆으로 이동
-invButton.AnchorPoint = Vector2.new(0, 1) -- [Modified] 좌측 하단 기준
-invButton.BackgroundColor3 = Color3.fromRGB(180, 110, 70) -- [Modified] 퀘스트 버튼과 동일한 Apricot 테마
-invButton.Text = "🎒"
-invButton.TextSize = 25 -- [Modified] 텍스트 크기 통일 (32 -> 25)
+invButton.Size = UDim2.new(0, 50, 0, 50) 
+invButton.Position = UDim2.new(0, 90, 1, -20) 
+invButton.AnchorPoint = Vector2.new(0, 1) 
+invButton.BackgroundColor3 = Color3.fromRGB(255, 220, 100) -- [Modified] 더 밝게 (Bright Yellow-Orange)
+invButton.Text = "🎒" 
+invButton.TextSize = 35 -- [Modified] 아이콘 크기 확대 (25 -> 35)
 invButton.Font = Enum.Font.GothamBold
-invButton.TextColor3 = Color3.new(1, 1, 1)
+invButton.AutoButtonColor = true
 invButton.Parent = screenGui
 
-
+local btnStroke = Instance.new("UIStroke") 
+btnStroke.Thickness = 3 -- [Modified] 더 두껍게
+btnStroke.Color = Color3.fromRGB(160, 90, 50) -- [Modified] 적당히 진한 갈색 (너무 어둡지 않게)
+btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border -- [Added] 테두리 모드 명시
+btnStroke.Parent = invButton
 
 local btnCorner = Instance.new("UICorner")
 btnCorner.CornerRadius = UDim.new(0, 12)
 btnCorner.Parent = invButton
 
--- 인벤토리 창
+-- 메인 프레임 (투명 컨테이너)
 local invWindow = Instance.new("Frame")
 invWindow.Name = "InventoryWindow"
-invWindow.Size = UDim2.new(0, 400, 0, 300)
-invWindow.Position = UDim2.new(0.5, 0, 0.5, 0)
+invWindow.Size = UDim2.new(0, 320, 0, 400) -- [Modified] 퀘스트창과 유사한 비율
+invWindow.Position = UDim2.new(0.5, 0, 0.4, 0) -- [Modified] 화면 중앙보다 약간 위 (카메라 아이콘 겹침 방지)
 invWindow.AnchorPoint = Vector2.new(0.5, 0.5)
-invWindow.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+invWindow.BackgroundTransparency = 1
 invWindow.Visible = false
 invWindow.Parent = screenGui
 
+local winStroke = Instance.new("UIStroke") -- [Added] 창 테두리
+winStroke.Thickness = 2
+winStroke.Color = Colors.Stroke 
+winStroke.Parent = invWindow
+
 local winCorner = Instance.new("UICorner")
+winCorner.CornerRadius = UDim.new(0, 16)
 winCorner.Parent = invWindow
+
+-- 1. 헤더 (Header)
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 50)
+header.BackgroundColor3 = Colors.Primary
+header.BorderSizePixel = 0
+header.Parent = invWindow
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 16)
+headerCorner.Parent = header
+
+-- 헤더 하단 직각 처리
+local headerCover = Instance.new("Frame")
+headerCover.Name = "CornerCover"
+headerCover.Size = UDim2.new(1, 0, 0, 10)
+headerCover.Position = UDim2.new(0, 0, 1, -10)
+headerCover.BackgroundColor3 = Colors.Primary
+headerCover.BorderSizePixel = 0
+headerCover.Parent = header
+
+-- 헤더 아이콘 (텍스트로 변경)
+local headerIcon = Instance.new("TextLabel")
+headerIcon.Name = "Icon"
+headerIcon.Size = UDim2.new(0, 24, 0, 24)
+headerIcon.Position = UDim2.new(0, 15, 0.5, 0)
+headerIcon.AnchorPoint = Vector2.new(0, 0.5)
+headerIcon.BackgroundTransparency = 1
+headerIcon.Text = "🎒"
+headerIcon.Font = Enum.Font.GothamBold
+headerIcon.TextSize = 28 -- [Modified] 24 -> 28
+headerIcon.TextColor3 = Color3.new(1, 1, 1)
+headerIcon.Parent = header
+
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Name = "Title"
+headerTitle.Size = UDim2.new(1, -80, 1, 0)
+headerTitle.Position = UDim2.new(0, 45, 0, 0)
+headerTitle.BackgroundTransparency = 1
+headerTitle.Text = "인벤토리"
+headerTitle.Font = Enum.Font.GothamBold
+headerTitle.TextSize = 28 -- [Modified] 24 -> 28
+headerTitle.TextColor3 = Colors.TextTitle
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Parent = header
+
+-- 닫기 버튼
+local closeBtn = Instance.new("ImageButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -15, 0.5, 0)
+closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+closeBtn.BackgroundColor3 = Color3.new(1, 1, 1)
+closeBtn.BackgroundTransparency = 0.8
+closeBtn.Image = "rbxassetid://3926305904" -- X icon
+closeBtn.ImageRectOffset = Vector2.new(284, 4)
+closeBtn.ImageRectSize = Vector2.new(24, 24)
+closeBtn.ImageColor3 = Color3.new(1, 1, 1)
+closeBtn.Parent = header
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(1, 0)
+closeCorner.Parent = closeBtn
+
+-- 2. 바디 (Content Area)
+local body = Instance.new("Frame")
+body.Name = "Body"
+body.Size = UDim2.new(1, 0, 1, -50) -- 헤더 높이 제외
+body.Position = UDim2.new(0, 0, 0, 50)
+body.BackgroundColor3 = Colors.Background
+body.BorderSizePixel = 0
+body.Parent = invWindow
+
+local bodyCorner = Instance.new("UICorner")
+bodyCorner.CornerRadius = UDim.new(0, 16)
+bodyCorner.Parent = body
+
+-- 바디 상단 직각 처리
+local bodyCover = Instance.new("Frame")
+bodyCover.Name = "CornerCover"
+bodyCover.Size = UDim2.new(1, 0, 0, 10)
+bodyCover.Position = UDim2.new(0, 0, 0, 0)
+bodyCover.BackgroundColor3 = Colors.Background
+bodyCover.BorderSizePixel = 0
+bodyCover.Parent = body
+
+
+-- 배경 클릭 시 닫기 위한 버튼 (투명)
+local backgroundBtn = Instance.new("TextButton")
+backgroundBtn.Name = "BackgroundButton"
+backgroundBtn.Size = UDim2.new(1, 0, 1, 0)
+backgroundBtn.Position = UDim2.new(0, 0, 0, 0)
+backgroundBtn.BackgroundTransparency = 1
+backgroundBtn.Text = ""
+backgroundBtn.Visible = false
+backgroundBtn.ZIndex = 0 -- 메인 프레임보다 뒤에 위치
+backgroundBtn.Parent = screenGui
 
 -- [v4.25k] 인벤토리 가시성 및 버튼 상태 통합 관리 함수
 local function setInventoryVisible(visible)
 	isOpen = visible
 	invWindow.Visible = isOpen
+	backgroundBtn.Visible = isOpen -- [Added] 배경 버튼 가시성 동기화
 	if isOpen then
-		invButton.BackgroundColor3 = Color3.fromRGB(200, 130, 90) -- 열림 (조금 더 밝게 강조)
+		invButton.BackgroundColor3 = Color3.fromRGB(255, 240, 150) -- [Modified] 열림 (매우 밝음)
 	else
-		invButton.BackgroundColor3 = Color3.fromRGB(180, 110, 70) -- 닫힘 (기본 Apricot)
+		invButton.BackgroundColor3 = Color3.fromRGB(255, 220, 100) -- [Modified] 닫힘 (밝은 옐로우오렌지)
 	end
 end
 
--- 타이틀
-local title = Instance.new("TextLabel")
-title.Name = "Title"
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.Text = "🎒 인벤토리"
-title.TextSize = 24
-title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Parent = invWindow
+-- 배경 클릭 시 닫기
+backgroundBtn.MouseButton1Click:Connect(function()
+	setInventoryVisible(false)
+end)
 
--- 닫기 버튼
-local closeBtn = Instance.new("TextButton")
-closeBtn.Name = "CloseBtn"
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-closeBtn.Text = "X"
-closeBtn.TextSize = 18
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextColor3 = Color3.new(1, 1, 1)
-closeBtn.Parent = invWindow
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
-closeCorner.Parent = closeBtn
-
--- 슬롯 컨테이너
+-- 슬롯 컨테이너 (바디 내부로 이동)
 local slotContainer = Instance.new("Frame")
 slotContainer.Name = "SlotContainer"
-slotContainer.Size = UDim2.new(1, -20, 1, -60)
-slotContainer.Position = UDim2.new(0, 10, 0, 50)
+slotContainer.Size = UDim2.new(1, -40, 1, -40) -- 여백 20씩
+slotContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+slotContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 slotContainer.BackgroundTransparency = 1
-slotContainer.Parent = invWindow
+slotContainer.Parent = body
 
 local gridLayout = Instance.new("UIGridLayout")
 gridLayout.CellSize = UDim2.new(0, 70, 0, 70)
-gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+gridLayout.CellPadding = UDim2.new(0, 15, 0, 15) -- 간격 조금 늘림
 gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left -- [Modified] 왼쪽 정렬 (사용자 요청)
 gridLayout.Parent = slotContainer
 
 -- 사용 모드 힌트 UI
@@ -129,7 +231,7 @@ useModeHint.Position = UDim2.new(0.5, 0, 0, 80)
 useModeHint.AnchorPoint = Vector2.new(0.5, 0)
 useModeHint.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 useModeHint.Text = "🎯 지형을 클릭해서 아이템 배치 (ESC 취소)"
-useModeHint.TextSize = 18
+useModeHint.TextSize = 22 -- [Modified] 18 -> 22
 useModeHint.Font = Enum.Font.GothamBold
 useModeHint.TextColor3 = Color3.new(1, 1, 1)
 useModeHint.Visible = false
@@ -558,14 +660,21 @@ local function createSlot(index, itemId, count)
 	local slot = Instance.new("TextButton")
 	slot.Name = "Slot_" .. index
 	slot.Size = UDim2.new(0, 70, 0, 70)
-	slot.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+	slot.BackgroundColor3 = Colors.Card -- [Modified] 카드 색상 (흰색)
+	slot.BorderSizePixel = 0 -- [Added] 기본 테두리 제거
 	slot.Text = ""
 	slot.LayoutOrder = index
 	slot.Parent = slotContainer
 	
 	local slotCorner = Instance.new("UICorner")
-	slotCorner.CornerRadius = UDim.new(0, 8)
+	slotCorner.CornerRadius = UDim.new(0, 12) -- [Modified] 조금 더 둥글게
 	slotCorner.Parent = slot
+
+	local slotStroke = Instance.new("UIStroke")
+	slotStroke.Thickness = 2
+	slotStroke.Color = Colors.Stroke -- [Modified] 연한 오렌지 테두리
+	slotStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border -- [Added] 아웃라인 모드
+	slotStroke.Parent = slot
 	
 	-- 3D 아이템 표시 (ViewportFrame)
 	local slotViewport = Instance.new("ViewportFrame")
@@ -608,8 +717,6 @@ local function createSlot(index, itemId, count)
 		local part = Instance.new("Part")
 		part.Size = Vector3.new(1, 2.5, 1) -- 3배 확대
 		part.Color = Color3.fromRGB(100, 200, 255)
-		part.Material = Enum.Material.Neon
-		part.Parent = slotViewport
 		part.Material = Enum.Material.Neon
 		part.Parent = slotViewport
 	elseif itemId == "Bungeoppang" then
@@ -777,9 +884,9 @@ local function createSlot(index, itemId, count)
 	countLabel.Position = UDim2.new(0, 0, 0.7, 0)
 	countLabel.BackgroundTransparency = 1
 	countLabel.Text = "x" .. count
-	countLabel.TextSize = 14
+	countLabel.TextSize = 18 -- [Modified] 14 -> 18
 	countLabel.Font = Enum.Font.GothamBold
-	countLabel.TextColor3 = Color3.new(1, 1, 1)
+	countLabel.TextColor3 = Color3.fromRGB(120, 90, 80) -- [Modified] 진한 갈색 (가독성)
 	countLabel.TextXAlignment = Enum.TextXAlignment.Right
 	countLabel.Parent = slot
 	
@@ -801,12 +908,12 @@ local function createSlot(index, itemId, count)
 		mouse.Icon = "rbxasset://SystemCursors/PointingHand"
 	end)
 	
-	-- 호버 효과
+	-- 호버 효과 (부드러운 크림색으로 변경)
 	slot.MouseEnter:Connect(function()
-		slot.BackgroundColor3 = Color3.fromRGB(100, 100, 130)
+		slot.BackgroundColor3 = Color3.fromRGB(245, 245, 240) -- [Modified] hover color
 	end)
 	slot.MouseLeave:Connect(function()
-		slot.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+		slot.BackgroundColor3 = Colors.Card -- [Modified] original color
 	end)
 end
 

@@ -24,26 +24,48 @@ end
 
 -- print("--- [PhotoGallery] ScreenGui Created in PlayerGui ---")
 
--- Open Button (Album)
+-- [Theme Colors] Sunny Orange (QuestUI/InventoryUI와 통일)
+local Colors = {
+	Primary = Color3.fromRGB(255, 170, 0), -- 진한 오렌지 (헤더, 강조)
+	Background = Color3.fromRGB(245, 240, 230), -- 진한 크림색 (바디)
+	Card = Color3.fromRGB(255, 255, 255), -- 흰색 (카드, 슬롯)
+	Stroke = Color3.fromRGB(254, 230, 133), -- 연한 오렌지 (테두리)
+	TextTitle = Color3.new(1, 1, 1), -- 헤더 타이틀 (흰색)
+	TextBody = Color3.fromRGB(140, 100, 80), -- 중간 갈색
+	TextHighlight = Color3.fromRGB(255, 140, 0), -- 오렌지 텍스트
+	CloseBtn = Color3.fromRGB(255, 255, 255), -- 닫기 버튼
+}
+
+-- 앨범 버튼 (좌측 하단, 퀘스트/인벤토리 옆)
+-- QuestButton: X=20, InventoryButton: X=90
+-- AlbumButton: X=160 (70 간격)
 local openBtn = Instance.new("TextButton")
 openBtn.Name = "OpenGalleryBtn"
-openBtn.Size = UDim2.new(0, 100, 0, 40)
-openBtn.Position = UDim2.new(1, -230, 1, -50) -- [Modified] Shifted Left
-openBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-openBtn.Text = "Album 📸"
-openBtn.TextScaled = true
+openBtn.Size = UDim2.new(0, 50, 0, 50)
+openBtn.Position = UDim2.new(0, 160, 1, -20)
+openBtn.AnchorPoint = Vector2.new(0, 1)
+openBtn.BackgroundColor3 = Color3.fromRGB(255, 240, 245) -- [Modified] 연한 핑크 (앨범 느낌)
+openBtn.Text = "🏞️" -- [Modified] 텍스트 제거, 아이콘 변경 (사진 느낌)
+openBtn.TextSize = 30
+openBtn.Font = Enum.Font.GothamBold
+openBtn.AutoButtonColor = true
 openBtn.Parent = screenGui
-openBtn.BorderSizePixel = 0
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = openBtn
 
--- [Added] Save Map Button (Next to Album)
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 12)
+btnCorner.Parent = openBtn
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Thickness = 3
+btnStroke.Color = Color3.fromRGB(160, 90, 50) -- [Modified] 통일된 테두리 색상
+btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+btnStroke.Parent = openBtn
+
+-- [Added] Save Map Button (Debug - Moved to Top Right)
 local saveBtn = Instance.new("TextButton")
 saveBtn.Name = "SaveMapBtn"
 saveBtn.Size = UDim2.new(0, 100, 0, 40)
-saveBtn.Position = UDim2.new(1, -120, 1, -50) -- [Modified] Original Album Position (Bottom Right)
+saveBtn.Position = UDim2.new(1, -120, 0, 10) -- Top Right
 saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 saveBtn.Text = "Save Map 💾"
@@ -66,13 +88,13 @@ saveBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- [Added] Tree Planter Toggle
+-- [Added] Tree Planter Toggle (Debug - Moved Top Right)
 local isPlanting = false
 local plantBtn = Instance.new("TextButton")
 plantBtn.Name = "PlantTreeBtn"
 plantBtn.Size = UDim2.new(0, 40, 0, 40)
-plantBtn.Position = UDim2.new(1, -120, 1, -100) -- [Modified] Moved Up (Row 2), Aligned right
-plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50) -- Green
+plantBtn.Position = UDim2.new(1, -120, 0, 60)
+plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
 plantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 plantBtn.Text = "🌲"
 plantBtn.TextScaled = true
@@ -83,13 +105,13 @@ local plantCorner = Instance.new("UICorner")
 plantCorner.CornerRadius = UDim.new(0, 8)
 plantCorner.Parent = plantBtn
 
--- [Added] Delete Tree Button
+-- [Added] Delete Tree Button (Debug - Moved Top Right)
 local isDeleting = false
 local deleteBtn = Instance.new("TextButton")
 deleteBtn.Name = "DeleteTreeBtn"
 deleteBtn.Size = UDim2.new(0, 40, 0, 40)
-deleteBtn.Position = UDim2.new(1, -170, 1, -100) -- [Modified] Moved Up (Row 2), Left of Plant
-deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Red
+deleteBtn.Position = UDim2.new(1, -170, 0, 60)
+deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 deleteBtn.Text = "🪓"
 deleteBtn.TextScaled = true
@@ -108,7 +130,7 @@ local function updateButtons()
 		screenGui:SetAttribute("Mode", "Plant")
 	elseif isDeleting then
 		plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-		deleteBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100) -- Bright Red
+		deleteBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
 		screenGui:SetAttribute("Mode", "Delete")
 	else
 		plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
@@ -119,117 +141,164 @@ end
 
 plantBtn.MouseButton1Click:Connect(function()
 	isPlanting = not isPlanting
-	isDeleting = false -- Mutually exclusive
+	isDeleting = false
 	updateButtons()
 end)
 
 deleteBtn.MouseButton1Click:Connect(function()
 	isDeleting = not isDeleting
-	isPlanting = false -- Mutually exclusive
+	isPlanting = false
 	updateButtons()
 end)
 
--- Planting Logic (Click Listener)
--- Logic (Click Listener)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if (not isPlanting and not isDeleting) then return end
-	if gameProcessed then return end -- Ignore UI clicks
-	
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		local mouse = player:GetMouse()
-		local ray = workspace.CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
-		local params = RaycastParams.new()
-		params.FilterType = Enum.RaycastFilterType.Exclude
-		params.FilterDescendantsInstances = {player.Character}
-		
-		local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-		
-		if result and result.Instance then
-			local events = ReplicatedStorage:WaitForChild("Events")
-			
-			if isPlanting then
-				-- PLANT Logic
-				local plantRemote = events:FindFirstChild("PlantTree")
-				if plantRemote then
-					plantRemote:FireServer(result.Position)
-				end
-				
-			elseif isDeleting then
-				-- DELETE Logic
-				-- Check if clicked object is part of a Tree
-				local model = result.Instance:FindFirstAncestorOfClass("Model")
-				if model and model.Name:match("Tree_Type") then
-					-- Found a tree!
-					local removeRemote = events:FindFirstChild("RemoveTree")
-					if removeRemote then
-						-- Send Position of Tree Pivot (Center) for server verification
-						local pos = model:GetPivot().Position
-						removeRemote:FireServer(pos)
-						
-						-- Optional: Simple client prediction visual? 
-						-- No, let server handle it to ensure sync.
-					end
-				end
-			end
-		end
-	end
-end)
 
--- Gallery Window (Hidden by default)
+-- Gallery Window (Re-styled)
+-- 메인 프레임 (투명 컨테이너)
 local window = Instance.new("Frame")
 window.Name = "GalleryWindow"
-window.Size = UDim2.new(0, 600, 0, 400)
-window.Position = UDim2.new(0.5, -300, 0.5, -200)
-window.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+window.Size = UDim2.new(0, 600, 0, 500) -- [Modified] 조금 더 크게
+window.Position = UDim2.new(0.5, 0, 0.4, 0)
+window.AnchorPoint = Vector2.new(0.5, 0.5)
+window.BackgroundTransparency = 1
 window.Visible = false
 window.Parent = screenGui
-window.BorderSizePixel = 0
+
+local winStroke = Instance.new("UIStroke")
+winStroke.Thickness = 2
+winStroke.Color = Colors.Stroke
+winStroke.Parent = window
+
 local winCorner = Instance.new("UICorner")
-winCorner.CornerRadius = UDim.new(0, 12)
+winCorner.CornerRadius = UDim.new(0, 16)
 winCorner.Parent = window
 
--- Title
-local title = Instance.new("TextLabel")
-title.Text = "My Photos"
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 20
-title.Parent = window
+-- 1. 헤더 (Header)
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 50)
+header.BackgroundColor3 = Colors.Primary
+header.BorderSizePixel = 0
+header.Parent = window
 
--- Close Button
-local closeBtn = Instance.new("TextButton")
-closeBtn.Text = "X"
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 16)
+headerCorner.Parent = header
+
+local headerCover = Instance.new("Frame")
+headerCover.Name = "CornerCover"
+headerCover.Size = UDim2.new(1, 0, 0, 10)
+headerCover.Position = UDim2.new(0, 0, 1, -10)
+headerCover.BackgroundColor3 = Colors.Primary
+headerCover.BorderSizePixel = 0
+headerCover.Parent = header
+
+-- 헤더 아이콘 & 타이틀
+local headerIcon = Instance.new("TextLabel")
+headerIcon.Name = "Icon"
+headerIcon.Size = UDim2.new(0, 24, 0, 24)
+headerIcon.Position = UDim2.new(0, 15, 0.5, 0)
+headerIcon.AnchorPoint = Vector2.new(0, 0.5)
+headerIcon.BackgroundTransparency = 1
+headerIcon.Text = "🖼️"
+headerIcon.Font = Enum.Font.GothamBold
+headerIcon.TextSize = 28
+headerIcon.TextColor3 = Color3.new(1, 1, 1)
+headerIcon.Parent = header
+
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Name = "Title"
+headerTitle.Size = UDim2.new(1, -80, 1, 0)
+headerTitle.Position = UDim2.new(0, 45, 0, 0)
+headerTitle.BackgroundTransparency = 1
+headerTitle.Text = "나의 앨범"
+headerTitle.Font = Enum.Font.GothamBold
+headerTitle.TextSize = 28
+headerTitle.TextColor3 = Colors.TextTitle
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Parent = header
+
+-- 닫기 버튼
+local closeBtn = Instance.new("ImageButton")
+closeBtn.Name = "CloseBtn"
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -40, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Parent = window
+closeBtn.Position = UDim2.new(1, -15, 0.5, 0)
+closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+closeBtn.BackgroundColor3 = Color3.new(1, 1, 1)
+closeBtn.BackgroundTransparency = 0.8
+closeBtn.Image = "rbxassetid://3926305904" -- X icon
+closeBtn.ImageRectOffset = Vector2.new(284, 4)
+closeBtn.ImageRectSize = Vector2.new(24, 24)
+closeBtn.ImageColor3 = Color3.new(1, 1, 1)
+closeBtn.Parent = header
+
 local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.CornerRadius = UDim.new(1, 0)
 closeCorner.Parent = closeBtn
 
--- Scrolling Frame (Grid)
+-- 2. 바디 (Content Area)
+local body = Instance.new("Frame")
+body.Name = "Body"
+body.Size = UDim2.new(1, 0, 1, -50) -- 헤더 제외
+body.Position = UDim2.new(0, 0, 0, 50)
+body.BackgroundColor3 = Colors.Background
+body.BorderSizePixel = 0
+body.Parent = window
+
+local bodyCorner = Instance.new("UICorner")
+bodyCorner.CornerRadius = UDim.new(0, 16)
+bodyCorner.Parent = body
+
+local bodyCover = Instance.new("Frame")
+bodyCover.Name = "CornerCover"
+bodyCover.Size = UDim2.new(1, 0, 0, 10)
+bodyCover.Position = UDim2.new(0, 0, 0, 0)
+bodyCover.BackgroundColor3 = Colors.Background
+bodyCover.BorderSizePixel = 0
+bodyCover.Parent = body
+
+-- 배경 클릭 시 닫기 위한 버튼 (투명)
+local backgroundBtn = Instance.new("TextButton")
+backgroundBtn.Name = "BackgroundButton"
+backgroundBtn.Size = UDim2.new(1, 0, 1, 0)
+backgroundBtn.Position = UDim2.new(0, 0, 0, 0)
+backgroundBtn.BackgroundTransparency = 1
+backgroundBtn.Text = ""
+backgroundBtn.Visible = false
+backgroundBtn.ZIndex = 0
+backgroundBtn.Parent = screenGui
+
+
+-- Scrolling Frame (Grid) - Moved inside Body
 local scroller = Instance.new("ScrollingFrame")
-scroller.Size = UDim2.new(1, -20, 1, -60)
-scroller.Position = UDim2.new(0, 10, 0, 50)
+scroller.Size = UDim2.new(1, -20, 1, -20)
+scroller.Position = UDim2.new(0, 10, 0, 10) -- Padding 10
 scroller.BackgroundTransparency = 1
 scroller.CanvasSize = UDim2.new(0, 0, 0, 0) -- Auto size later
-scroller.Parent = window
+scroller.ScrollBarThickness = 4
+scroller.ScrollBarImageColor3 = Colors.Primary
+scroller.Parent = body
 
 -- Grid Layout
 local grid = Instance.new("UIGridLayout")
 grid.CellSize = UDim2.new(0, 180, 0, 180)
 grid.CellPadding = UDim2.new(0, 10, 0, 10)
+grid.SortOrder = Enum.SortOrder.LayoutOrder -- [Added] 순서 보장 (신규 사진 뒤로)
 grid.Parent = scroller
 
--- Open/Close Logic
+-- Open/Close Logic (Updated)
 openBtn.MouseButton1Click:Connect(function()
 	window.Visible = not window.Visible
+	backgroundBtn.Visible = window.Visible
 end)
+
 closeBtn.MouseButton1Click:Connect(function()
 	window.Visible = false
+	backgroundBtn.Visible = false
+end)
+
+backgroundBtn.MouseButton1Click:Connect(function()
+	window.Visible = false
+	backgroundBtn.Visible = false
 end)
 
 -- 2. Capture Logic
@@ -364,22 +433,24 @@ local function createPhoto(data)
 	
 	verifyBtn.MouseButton1Click:Connect(function()
 		local isMatch = photoFrame:GetAttribute("IsMatch")
-		local target = photoFrame:GetAttribute("Target")
+		-- local target = photoFrame:GetAttribute("Target")
 		local obj = photoFrame:GetAttribute("Object")
 		local col = photoFrame:GetAttribute("Color")
 		
-		if target then
-			-- Verification Data Exists
-			local result = isMatch and "O (Success)" or "X (Fail)"
-			local capturedInfo = obj or "Unknown"
-			if col then capturedInfo = col .. " " .. capturedInfo end
+		if obj then
+			local infoText = obj
+			if col then infoText = col .. " " .. infoText end
 			
-			print("🔎 Verifying Photo...")
-			print("   Target: " .. tostring(target))
-			print("   Captured: " .. capturedInfo)
-			print("   Result: " .. result)
+			if isMatch then
+				caption.Text = "✅ " .. infoText
+				caption.TextColor3 = Color3.fromRGB(0, 180, 0) -- Green
+			else
+				caption.Text = "📷 " .. infoText
+				caption.TextColor3 = Color3.fromRGB(50, 50, 50) -- Dark Grey
+			end
 		else
-			print("🔎 Scene Photo (No Verification Data)")
+			caption.Text = "❌ 식별된 오브젝트 없음"
+			caption.TextColor3 = Color3.fromRGB(200, 50, 50) -- Red
 		end
 	end)
 end

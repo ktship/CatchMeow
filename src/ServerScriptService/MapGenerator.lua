@@ -1751,8 +1751,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		accentColor = (baseColor == CAT_COLORS.Orange) and CAT_COLORS.Brown or CAT_COLORS.DarkGrey
 	end
 	
-	-- Set Attribute for Mission
-	model:SetAttribute("Pattern", selectedPattern)
+	-- [Variety Logic] Removed (User Request - Reverted to Standard)
 	
 	-- Helper
 	local function makePart(name, size, color, cf, parentPart)
@@ -1828,7 +1827,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		local legColor = (selectedPattern == "Pointed") and accentColor or baseColor
 		local l = makePart(name, legSize, legColor, cf)
 		if useSocks then
-			makePart(name.."Sock", Vector3.new(0.32, 0.2, 0.32), CAT_COLORS.White, cf * CFrame.new(0, -0.4, 0), l)
+			makePart(name.."Sock", Vector3.new(0.32, 0.2, 0.32), CAT_COLORS.White, CFrame.new(0, -0.4, 0), l)
 		end
 		return l
 	end
@@ -1837,6 +1836,8 @@ function MapGenerator.SpawnCat(locationCF, parent)
 	local legFR = makeLeg("FR", CFrame.new(0.35, 0.5, -0.8))
 	local legBL = makeLeg("BL", CFrame.new(-0.35, 0.5, 0.8))
 	local legBR = makeLeg("BR", CFrame.new(0.35, 0.5, 0.8))
+
+
 
 	-- AI Loop (Non-blocking Physics + State Machine)
 	task.spawn(function()
@@ -1848,7 +1849,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 		
 		-- Idle Timer
 		local idleTimer = 0
-		local idleDuration = math.random(2, 5)
+		local idleDuration = math.random(1, 2)
 		local searchCooldown = 0 -- [v4.4] Prevent rapid re-search
 		
 		-- [v3.9/v4.0/v4.2/v4.3] Centralized State Reset & Visual Cleanupck physics position independently of visual animation
@@ -2578,11 +2579,18 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			
 			-- [v4.24b] Leg Animation (Restored)
 			if isMoving then
-				local angle = math.rad(20) * math.sin(t)
-				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, -0.8) * CFrame.Angles(angle, 0, 0)
-				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1, -0.8) * CFrame.Angles(-angle, 0, 0)
-				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, 0.8) * CFrame.Angles(-angle, 0, 0)
-				legBR.CFrame = torso.CFrame * CFrame.new(0.35, -1, 0.8) * CFrame.Angles(angle, 0, 0)
+				local angle = math.rad(25) * math.sin(t) -- [v4.29] Angle increased slightly
+				
+				-- [v4.30] Natural Leg Rotation (Pivot at Hip)
+				-- Hip Joint is at Y = -0.5 (Bottom of Torso)
+				-- Leg Center is Y = -0.5 relative to Hip (since Leg Height is 1.0)
+				local hipY = -0.5
+				local centerOffset = CFrame.new(0, -0.5, 0)
+				
+				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, hipY, -0.8) * CFrame.Angles(angle, 0, 0) * centerOffset
+				legFR.CFrame = torso.CFrame * CFrame.new(0.35, hipY, -0.8) * CFrame.Angles(-angle, 0, 0) * centerOffset
+				legBL.CFrame = torso.CFrame * CFrame.new(-0.35, hipY, 0.8) * CFrame.Angles(-angle, 0, 0) * centerOffset
+				legBR.CFrame = torso.CFrame * CFrame.new(0.35, hipY, 0.8) * CFrame.Angles(angle, 0, 0) * centerOffset
 			else
 				legFL.CFrame = torso.CFrame * CFrame.new(-0.35, -1, -0.8)
 				legFR.CFrame = torso.CFrame * CFrame.new(0.35, -1, -0.8)

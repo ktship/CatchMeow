@@ -2,6 +2,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Players = game:GetService("Players")
 
+-- [Added] NPC 이름 Localization 테이블 (서버 사이드)
+local NPCNames = {
+	["Grandpa"] = "앉아있는 노인",
+	["Chef"] = "요리사",
+}
 -- RemoteFunction 생성 및 설정
 local dialogueSystemFolder = ReplicatedStorage:FindFirstChild("DialogueSystem")
 if not dialogueSystemFolder then
@@ -94,7 +99,9 @@ local function setupNPC(npcModel)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "DialoguePrompt"
 	prompt.ActionText = "대화하기"
-	prompt.ObjectText = npcModel.Name
+	-- [Modified] Localization 적용
+	local displayName = NPCNames[npcModel.Name] or npcModel.Name
+	prompt.ObjectText = displayName
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.RequiresLineOfSight = false
 	prompt.MaxActivationDistance = 10

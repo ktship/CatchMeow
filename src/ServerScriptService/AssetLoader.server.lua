@@ -34,7 +34,7 @@ end
 for _, info in ipairs(ASSETS_TO_LOAD) do
 	if assetsFolder:FindFirstChild(info.Name) then
 		if Config.Debug and Config.Debug.ShowLogs then
-			print("[AssetLoader] Found existing '" .. info.Name .. "'. Skipping.")
+			-- print("[AssetLoader] Found existing '" .. info.Name .. "'. Skipping.")
 		end
 		continue
 	end
@@ -76,7 +76,7 @@ for _, info in ipairs(ASSETS_TO_LOAD) do
 	
 	if not assetItem then
 		if Config.Debug and Config.Debug.ShowLogs then
-			print("[AssetLoader] Creating fallback for '" .. info.Name .. "'")
+			-- print("[AssetLoader] Creating fallback for '" .. info.Name .. "'")
 		end
 		local fallback = info.Fallback()
 		fallback.Parent = assetsFolder
@@ -84,5 +84,5 @@ for _, info in ipairs(ASSETS_TO_LOAD) do
 end
 
 if Config.Debug and Config.Debug.ShowLogs then
-	print("[AssetLoader] Assets initialization complete.")
+	-- print("[AssetLoader] Assets initialization complete.")
 end

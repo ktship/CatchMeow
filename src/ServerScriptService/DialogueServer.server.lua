@@ -32,7 +32,7 @@ local DialogueManager
     - 클라이언트가 NPC와 대화를 시도할 때 호출됨
 ]=]
 startDialogueFunc.OnServerInvoke = function(player, npcName)
-	print("[DialogueServer] " .. player.Name .. " requested dialogue with " .. npcName)
+	-- print("[DialogueServer] " .. player.Name .. " requested dialogue with " .. npcName)
 	
 	if not DialogueManager then
 		local module = dialogueSystemFolder:FindFirstChild("DialogueManager")
@@ -57,7 +57,7 @@ selectChoiceEvent.OnServerEvent:Connect(function(player, npcName, choiceData)
 		local npcKey = npcName or "Unknown"
 		local stateKey = "ST_" .. npcKey
 		player:SetAttribute(stateKey, choiceData.SetState)
-		print("[DialogueServer] Updated state for " .. player.Name .. " (" .. tostring(npcName) .. ") -> " .. tostring(choiceData.SetState))
+		-- print("[DialogueServer] Updated state for " .. player.Name .. " (" .. tostring(npcName) .. ") -> " .. tostring(choiceData.SetState))
 	end
 
 	-- 아이템 지급 예시 (GrandpaData에는 Action 필드가 없지만 확장성을 위해)
@@ -100,12 +100,12 @@ local function setupNPC(npcModel)
 	prompt.MaxActivationDistance = 10
 	prompt.Parent = interactPart
 	
-	print("[DialogueServer] Added ProximityPrompt to " .. npcModel.Name .. " (attached to " .. interactPart.Name .. ")")
+	-- print("[DialogueServer] Added ProximityPrompt to " .. npcModel.Name .. " (attached to " .. interactPart.Name .. ")")
 end
 
 -- NPC 찾기 및 설정
 local function scanForNPCs()
-	print("[DialogueServer] Scanning for NPCs...")
+	-- print("[DialogueServer] Scanning for NPCs...")
 	
 	-- 1. NPCs 폴더 확인 (고정된 폴더)
 	local npcsFolder = workspace:FindFirstChild("NPCs")
@@ -120,12 +120,12 @@ local function scanForNPCs()
 	local mapFolder = workspace:FindFirstChild("Map")
 	if not mapFolder then
 		-- 맵이 아직 없으면 생성을 대기
-		print("[DialogueServer] Waiting for Map folder...")
+		-- print("[DialogueServer] Waiting for Map folder...")
 		mapFolder = workspace:WaitForChild("Map", 10) 
 	end
 	
 	if mapFolder then
-		print("[DialogueServer] Map folder found. Scanning internal NPCs...")
+		-- print("[DialogueServer] Map folder found. Scanning internal NPCs...")
 		-- 맵 안의 모든 모델을 검색 (Grandpa가 바로 자식이 아닐 수도 있음. 하지만 보통 자식임)
 		for _, child in ipairs(mapFolder:GetChildren()) do
 			if child:IsA("Model") and (child.Name == "Grandpa" or child.Name == "Chef") then
@@ -155,7 +155,7 @@ task.delay(3, scanForNPCs) -- 1초 -> 3초로 늘림
 workspace.ChildAdded:Connect(function(child)
 	if child.Name == "Map" then
 		task.wait(1) -- 맵 내부 로딩 대기
-		print("[DialogueServer] New Map detected. Rescanning...")
+		-- print("[DialogueServer] New Map detected. Rescanning...")
 		-- 새 맵의 자식들 스캔
 		for _, grandChild in ipairs(child:GetChildren()) do
 			if grandChild:IsA("Model") and (grandChild.Name == "Grandpa" or grandChild.Name == "Chef") then
@@ -171,4 +171,4 @@ workspace.ChildAdded:Connect(function(child)
 	end
 end)
 
-print("[DialogueServer] Initialized")
+-- print("[DialogueServer] Initialized")

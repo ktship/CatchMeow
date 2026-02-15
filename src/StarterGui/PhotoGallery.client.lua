@@ -357,13 +357,63 @@ local function createPhoto(data)
 	
 	local partCount = 0
 	
+	local seenModels = {} -- [Added] Track models to avoid duplicate cloning (e.g. Character parts)
+	
 	for _, part in ipairs(parts) do
+		-- [Added] Check if part belongs to a Character (Model with Humanoid)
+		local character = part.Parent
+		-- [Modified] Include Chef (No Humanoid) as a Character
+		if character and character:IsA("Model") and (character:FindFirstChild("Humanoid") or character.Name == "Chef") then
+			-- It's a Character! Clone only once.
+			if not seenModels[character] then
+				seenModels[character] = true
+				
+				local clone = character:Clone()
+				
+				-- Cleanup Scripts/Physics from Character
+				for _, child in ipairs(clone:GetDescendants()) do 
+					if child:IsA("Script") or child:IsA("LocalScript") or child:IsA("Sound") then
+						child:Destroy()
+					end
+				end
+				-- Ensure Anchored for ViewportFrame
+				for _, child in ipairs(clone:GetDescendants()) do
+					if child:IsA("BasePart") then
+						child.Anchored = true
+						child.CanCollide = false
+					end
+				end
+				
+				-- Relative Position Logic for Model
+				-- Pivot entire model using CFrame math
+				-- [Modified] Robust Pivot Logic (Works even without PrimaryPart)
+				local targetPivot = character:GetPivot()
+				local relativeCF = boxCFrame:Inverse() * targetPivot
+				clone:PivotTo(relativeCF)
+				
+				clone.Parent = worldModel
+				partCount = partCount + 1
+			end
+			-- Skip individual parts of character
+			continue
+		end
+	
 		if part:IsA("BasePart") or part:IsA("MeshPart") then
-			-- only visible parts
-			if part.Transparency < 1 then
+			-- [Modified] Allow Transparent parts IF they have a Decal/Texture (e.g. Special Cat Side Panels)
+			local hasTexture = part:FindFirstChildWhichIsA("Decal") or part:FindFirstChildWhichIsA("Texture")
+			
+			if part.Transparency < 1 or hasTexture then
 				-- Clone
 				local clone = part:Clone()
-				clone:ClearAllChildren() -- Remove scripts/joints
+				
+				-- [Modified] Don't use ClearAllChildren(), it deletes Decals!
+				-- Only remove Physics/Scripts
+				for _, child in ipairs(clone:GetChildren()) do
+					if child:IsA("JointInstance") or child:IsA("WeldConstraint") or child:IsA("Script") or child:IsA("LocalScript") or child:IsA("Sound") then
+						child:Destroy()
+					end
+				end
+				
 				clone.Anchored = true
 				clone.CanCollide = false
 				

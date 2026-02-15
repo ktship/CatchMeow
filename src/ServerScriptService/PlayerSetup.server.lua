@@ -30,7 +30,7 @@ local function giveWeapon(player)
 				local newWeapon = weapon:Clone()
 				newWeapon.Parent = player.Backpack
 				
-				print("[PlayerSetup] " .. weaponName .. " given to " .. player.Name)
+				-- print("[PlayerSetup] " .. weaponName .. " given to " .. player.Name)
 			else
 				warn("[PlayerSetup] " .. weaponName .. " not found in Weapons folder")
 			end

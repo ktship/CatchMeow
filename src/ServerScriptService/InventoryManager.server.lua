@@ -45,7 +45,7 @@ local function addItem(player, itemId, count)
 	end
 	
 	if Config.Debug and Config.Debug.ShowLogs then
-		print("[InventoryManager] Adding " .. count .. "x " .. itemId .. " to " .. player.Name)
+		-- print("[InventoryManager] Adding " .. count .. "x " .. itemId .. " to " .. player.Name)
 	end
 	
 	-- 기존 슬롯 찾기
@@ -66,7 +66,7 @@ local function addItem(player, itemId, count)
 	
 	-- 변경 사항 전송
 	if Config.Debug and Config.Debug.ShowLogs then
-		print("[InventoryManager] Inventory updated for " .. player.Name)
+		-- print("[InventoryManager] Inventory updated for " .. player.Name)
 	end
 	updateEvent:FireClient(player, inv)
 	
@@ -95,10 +95,10 @@ local function useItem(player, slotIndex)
 				humanoid.WalkSpeed = math.max(16, humanoid.WalkSpeed - 8)
 			end
 		end)
-		print(player.Name .. " used " .. itemDef.Name .. " - Speed Up!")
+		-- print(player.Name .. " used " .. itemDef.Name .. " - Speed Up!")
 	elseif itemDef.Effect == "LureCat" then
 		-- TODO: 고양이 유인 효과
-		print(player.Name .. " used " .. itemDef.Name .. " - Lure Cat!")
+		-- print(player.Name .. " used " .. itemDef.Name .. " - Lure Cat!")
 	elseif itemDef.Effect == "SummonTrap" then
 		-- CatTrap 소환 효과 (기존 CatTrapTool 로직 이식)
 		local char = player.Character
@@ -115,13 +115,13 @@ local function useItem(player, slotIndex)
 			trapModel:PivotTo(targetCFrame)
 			
 			-- 효과음이나 파티클 등을 추가하면 더 좋음
-			print(player.Name .. " summoned CatTrap!")
+			-- print(player.Name .. " summoned CatTrap!")
 		else
 			warn("Cannot summon trap. Character or TrapModel missing.")
 			return -- 아이템 소모 방지
 		end
 	else
-		print(player.Name .. " used " .. itemDef.Name)
+		-- print(player.Name .. " used " .. itemDef.Name)
 	end
 	
 	-- 수량 감소
@@ -147,7 +147,7 @@ local function buyItem(player, itemId)
 	
 	-- 테스트: 무조건 지급
 	addItem(player, itemId, 1)
-	print(player.Name .. " bought " .. itemDef.Name)
+	-- print(player.Name .. " bought " .. itemDef.Name)
 end
 
 -- 월드 아이템 클릭 처리 (ClickDetector 사용)
@@ -215,7 +215,7 @@ end
 requestUpdateEvent.OnServerEvent:Connect(function(player)
 	local inv = PlayerInventories[player]
 	if inv then
-		print("[InventoryManager] Resending inventory to " .. player.Name .. " (Request)")
+		-- print("[InventoryManager] Resending inventory to " .. player.Name .. " (Request)")
 		updateEvent:FireClient(player, inv)
 	else
 		-- 초기화되지 않았으면 초기화 후 전송
@@ -251,7 +251,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 	
 	-- [v4.28] CatTrap: Assets에서 복제하여 배치 (Multi-trap 지원)
 	if itemId == "CatTrap" then
-		print("Placing CatTrap at " .. tostring(position))
+		-- print("Placing CatTrap at " .. tostring(position))
 		
 		-- [v4.28] CatTrap: ReplicatedStorage.Items에서 복제하여 배치
 		local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
@@ -281,7 +281,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 				
 				wsTrap.Parent = itemsFolder
 				trapSource = wsTrap
-				print("[InventoryManager] Moved and Cleaned CatTrap from Workspace to Items.")
+				-- print("[InventoryManager] Moved and Cleaned CatTrap from Workspace to Items.")
 			end
 		end
 
@@ -344,7 +344,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 			-- 일단 Setting 상태일 때만 미끼를 놓을 수 있게 제한
 			local currentState = trapModel:GetAttribute("TargetState")
 			if currentState == "Setting" then
-				print("[InventoryManager] Snapping " .. itemId .. " as bait into CatTrap!")
+				-- print("[InventoryManager] Snapping " .. itemId .. " as bait into CatTrap!")
 				
 				-- 관리를 위해 Attribute 설정 (CatTrapHandler가 시각화 및 로직 처리)
 				trapModel:SetAttribute("BaitItem", itemId)
@@ -388,7 +388,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 	end
 	
 	updateEvent:FireClient(player, inv)
-	print(player.Name .. " placed " .. itemDef.Name .. " at " .. tostring(position))
+	-- print(player.Name .. " placed " .. itemDef.Name .. " at " .. tostring(position))
 end)
 
 -- 외부에서 호출 가능하도록 모듈화
@@ -407,4 +407,4 @@ _G.InventoryManager = {
 	SetupWorldItem = setupWorldItem,
 }
 
-print("[InventoryManager] Initialized")
+-- print("[InventoryManager] Initialized")

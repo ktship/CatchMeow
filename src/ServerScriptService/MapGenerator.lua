@@ -1,12 +1,13 @@
 -- MapGenerator.lua
 -- ServerScriptService에 위치해야 합니다.
-print("[MapGenerator] SCRIPT START - Reading file...")
+-- print("[MapGenerator] SCRIPT START - Reading file...")
 -- 게임 시작 시 도시 맵을 생성합니다.
-print("[MapGenerator] Loaded v4.27d (Faster Search + Steady FOV)")
+-- print("[MapGenerator] Loaded v4.27d (Faster Search + Steady FOV)")
 
 local HttpService = game:GetService("HttpService")
 
 local MapGenerator = {}
+MapGenerator.TargetCatUUID = nil -- [New] Store Target Cat UUID
 
 -- [Hoisted Constants] Cat Variety Data
 if not _G.FoodClaims then
@@ -472,13 +473,78 @@ function MapGenerator.GenerateProcedural()
 	catsFolder.Name = "Cats"
 	catsFolder.Parent = mapFolder
 
+	-- [Modified] Special Cat Request (Single Yellow Cat with Texture)
+	-- [Modified] Cat Spawning (Edges Only, 30 margin)
 	for i = 1, 110 do
-		local cx = math.random(-mapSize/2 + 20, mapSize/2 - 20)
-		local cz = math.random(-mapSize/2 + 20, mapSize/2 - 20)
+		local margin = 30
+		local side = math.random(1, 4)
+		local cx, cz
+		
+		if side == 1 then -- Top (Z-)
+			cx = math.random(-mapSize/2, mapSize/2)
+			cz = math.random(-mapSize/2, -mapSize/2 + margin)
+		elseif side == 2 then -- Bottom (Z+)
+			cx = math.random(-mapSize/2, mapSize/2)
+			cz = math.random(mapSize/2 - margin, mapSize/2)
+		elseif side == 3 then -- Left (X-)
+			cx = math.random(-mapSize/2, -mapSize/2 + margin)
+			cz = math.random(-mapSize/2, mapSize/2)
+		else -- Right (X+)
+			cx = math.random(mapSize/2 - margin, mapSize/2)
+			cz = math.random(-mapSize/2, mapSize/2)
+		end
+		
 		-- 지형 높이 계산하여 정확한 위치에 스폰
 		local groundY = getHeight(cx, cz) 
 		local catCF = CFrame.new(cx, groundY + 1, cz) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 		MapGenerator.SpawnCat(catCF, catsFolder)
+	end
+	
+	-- Spawn 1 Special Cat (Yellow + Pink Heart)
+	-- [Modified] Added Collision Check to prevent spawning inside buildings
+	local attempts = 0
+	local placed = false
+	local boxSize = Vector3.new(4, 3, 4) -- Size of area to check (Cat is roughly 2x1x1)
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterDescendantsInstances = {catsFolder, workspace.Camera} -- [Modified] Exclude only cats/camera, check EVERYTHING
+	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+	
+	repeat
+		attempts += 1
+		-- print("[SpecialCat] Checking spot... Attempt " .. attempts)
+		local cx = math.random(-24, -12) -- [Modified] User Specific Range (Near Stall)
+		local cz = math.random(5, 17)
+		local groundY = getHeight(cx, cz)
+		local catCF = CFrame.new(cx, groundY + 1, cz)
+		
+		-- Collision Check
+		local parts = workspace:GetPartBoundsInBox(catCF, boxSize, overlapParams)
+		local safe = true
+		
+		for _, p in ipairs(parts) do
+			if p.Name == "Terrain" or p.Name == "RoadBlock" or p.Name == "RoadBed" then
+				-- Safe to walk on
+			else
+				-- Hit something else (Wall, House, Tree, Stall, etc.)
+				safe = false
+				-- print("[SpecialCat] Hit Obstacle: " .. p.Name .. " (" .. p.Parent.Name .. ")")
+				break
+			end
+		end
+		
+		if safe then
+			MapGenerator.spawnYellowPinkHeart(catCF, catsFolder)
+			placed = true
+			-- print("[SpecialCat] Placed safely at attempt " .. attempts)
+		end
+	until placed or attempts >= 20
+	
+	if not placed then
+		warn("[SpecialCat] Failed to find safe spot after 20 attempts. Spawning at backup.")
+		local cx = math.random(-24, -12) 
+		local cz = math.random(5, 17)
+		local groundY = getHeight(cx, cz)
+		MapGenerator.spawnYellowPinkHeart(CFrame.new(cx, groundY + 1, cz), catsFolder)
 	end
 	
 	
@@ -505,7 +571,7 @@ function MapGenerator.GenerateProcedural()
 end
 
 function MapGenerator.LoadMapFromData(mapData)
-	print("Loading Map from DataStore...")
+	-- print("Loading Map from DataStore...")
 	MapGenerator.ClearMap()
 	MapGenerator.CurrentData = mapData -- Cache loaded data too
 
@@ -727,7 +793,7 @@ function MapGenerator.SpawnGrandpa(locationCF, parent)
 		-- 3. Animation
 		playSitAnim(model)
 		
-		print("[MapGenerator] Spawned Grandpa (Rigged) at CFrame.")
+		-- print("[MapGenerator] Spawned Grandpa (Rigged) at CFrame.")
 	else
 		warn("[MapGenerator] Grandpa model not found in ReplicatedStorage.NPCs")
 	end
@@ -933,7 +999,7 @@ end
 
 function MapGenerator.GenerateVillage()
 	if not CityMapStore then
-		print("⚠️ DataStore invalid. Generating new procedural map (Not Saving)...")
+		-- print("⚠️ DataStore invalid. Generating new procedural map (Not Saving)...")
 		MapGenerator.GenerateProcedural()
 		return
 	end
@@ -944,13 +1010,13 @@ function MapGenerator.GenerateVillage()
 	
 	-- if success and savedMap then
 	if false then -- [FORCE RESET] Ignore saved data to regenerate terrain correctly
-		print("✅ Found saved map data! Loading...")
+		-- print("✅ Found saved map data! Loading...")
 		MapGenerator.LoadMapFromData(savedMap)
 		
 		
 		-- [Removed] PopulateTreesIfMissing (Obsolete)
 	else
-		print("❌ No saved map. Generating new procedural map... (Not Saving)")
+		-- print("❌ No saved map. Generating new procedural map... (Not Saving)")
 		local mapData = MapGenerator.GenerateProcedural()
 		
 		-- [Modified] Do NOT Auto-Save. Wait for Button Click.
@@ -1501,6 +1567,8 @@ function MapGenerator.SpawnChef(locationCF, parent)
 	face.Face = Enum.NormalId.Front
 	face.Parent = head
 	
+	model.PrimaryPart = head -- [Added] Set PrimaryPart for Pivot operations (PhotoGallery)
+	
 	-- Chef Hat (Tall Cylinder)
 	local hat = makePart("ChefHat", Vector3.new(1, 1.2, 1), Color3.new(1,1,1), CFrame.new(0, 5.2, 0))
 	-- Using Special Mesh for clean look
@@ -1603,7 +1671,7 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 		local sourceItem = assets and assets:FindFirstChild("Bungeoppang")
 		
 		if sourceItem then
-			print("[MapGenerator] SpawnWorldItem Called. UUID: " .. HttpService:GenerateGUID(false))
+			-- print("[MapGenerator] SpawnWorldItem Called. UUID: " .. HttpService:GenerateGUID(false))
 			local model = sourceItem:Clone()
 			
 			-- [v4.25b] Support both Part and Accessory/Model
@@ -1641,7 +1709,7 @@ function MapGenerator.SpawnWorldItem(itemId, position, parent)
 			wrapperModel:SetAttribute("IsFood", true)
 			
 			part = targetHandle or (model:IsA("BasePart") and model) -- ClickDetector 부착 대상
-			print(string.format("[MapGenerator] Spawned Item. Sibling Count in WorldItems: %d", #parent:GetChildren()))
+			-- print(string.format("[MapGenerator] Spawned Item. Sibling Count in WorldItems: %d", #parent:GetChildren()))
 		else
 			-- Fallback (Simple Part) if Asset not ready
 			part = Instance.new("Part")
@@ -1915,9 +1983,9 @@ function MapGenerator.SpawnCat(locationCF, parent)
 				if FoodClaims[targetFood] == catId then
 					FoodClaims[targetFood] = nil
 					targetFood:SetAttribute("ClaimedBy", nil)
-					print(string.format("[AI] %s RELEASED Memory Lock on %s", shortId, targetFood.Name))
+					-- print(string.format("[AI] %s RELEASED Memory Lock on %s", shortId, targetFood.Name))
 				elseif FoodClaims[targetFood] then
-					print(string.format("[AI] %s WANTED release %s but Lock held by %s. (My Claim? %s)", shortId, targetFood.Name, tostring(FoodClaims[targetFood]), tostring(targetFood:GetAttribute("ClaimedBy"))))
+					-- print(string.format("[AI] %s WANTED release %s but Lock held by %s. (My Claim? %s)", shortId, targetFood.Name, tostring(FoodClaims[targetFood]), tostring(targetFood:GetAttribute("ClaimedBy"))))
 				end
 				
 				-- Clear attributes for visual sync
@@ -2163,7 +2231,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 									FoodClaims[closestFood] = catId
 									closestFood:SetAttribute("ClaimedBy", catId) -- Visual Sync
 									
-									print(string.format("[AI] %s LOCKED %s (%s) in Memory [Table: %s]", shortId, closestFood.Name, tostring(closestFood:GetAttribute("RefID")), tostring(FoodClaims)))
+									-- print(string.format("[AI] %s LOCKED %s (%s) in Memory [Table: %s]", shortId, closestFood.Name, tostring(closestFood:GetAttribute("RefID")), tostring(FoodClaims)))
 									targetFood = closestFood
 									state = "MovingToFood"
 									
@@ -2248,24 +2316,24 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			elseif state == "MovingToFood" then
 				-- [v4.23n] Ghost Eating Fix: Check if food still exists properly
 				if not targetFood or not targetFood.Parent then
-					print(string.format("[AI] %s ABORT: %s is gone (Despawned/Destroyed)", shortId, targetFood and targetFood.Name or "nil"))
+					-- print(string.format("[AI] %s ABORT: %s is gone (Despawned/Destroyed)", shortId, targetFood and targetFood.Name or "nil"))
 					transitionToIdle("FoodDespawned")
 				
 				-- [v4.8] Verify Memory Lock
 				elseif FoodClaims[targetFood] ~= catId then
-					print(string.format("[AI] %s ALERT: Lost Memory Lock on %s! Held by: %s", shortId, targetFood and targetFood.Name or "nil", tostring(FoodClaims[targetFood])))
+					-- print(string.format("[AI] %s ALERT: Lost Memory Lock on %s! Held by: %s", shortId, targetFood and targetFood.Name or "nil", tostring(FoodClaims[targetFood])))
 					transitionToIdle("LockLost")
 				else
 					-- [v4.2] Give up if SOMEONE ELSE starts eating our target
 					local eater = targetFood:GetAttribute("EatingBy")
 					if eater and eater ~= catId then
-						print(string.format("[AI] %s ABORT: %s is being eaten by %s", shortId, targetFood.Name, tostring(eater)))
+						-- print(string.format("[AI] %s ABORT: %s is being eaten by %s", shortId, targetFood.Name, tostring(eater)))
 						transitionToIdle("ClaimedByOther")
 					else
 						-- [v3.9] Validate Position (Despawn check)
 						local foodPos = getItemPos(targetFood)
 						if not foodPos then
-							print(string.format("[AI] %s ABORT: Cannot find position for %s (Despawned?)", shortId, targetFood.Name))
+							-- print(string.format("[AI] %s ABORT: Cannot find position for %s (Despawned?)", shortId, targetFood.Name))
 							transitionToIdle("FoodDespawned")
 						else
 							-- [v4.25p] 덫 진입 로직 정상적인 else 위치로 복구
@@ -2274,7 +2342,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 							if targetFood.Name == "CatTrap" then
 								-- [DEBUG] Trace Targeting
 								if tick() % 1 < 0.1 then
-									print(string.format("[AI TRAP DEBUG] Cat %s processing Trap Logic", shortId))
+									-- print(string.format("[AI TRAP DEBUG] Cat %s processing Trap Logic", shortId))
 								end
 								
 								local partEnter = targetFood:FindFirstChild("PartEnter", true)
@@ -2436,7 +2504,7 @@ function MapGenerator.SpawnCat(locationCF, parent)
 									
 									-- [v4.2] Set Exclusive Eating Attribute
 									targetFood:SetAttribute("EatingBy", catId)
-									print(string.format("[AI] %s STARTED EATING %s (%s) -> EatingBy Locked", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+									-- print(string.format("[AI] %s STARTED EATING %s (%s) -> EatingBy Locked", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
 									
 									-- [v4.3] Disable Pickup for players
 									local cd = targetFood:FindFirstChildOfClass("ClickDetector")
@@ -2476,14 +2544,14 @@ function MapGenerator.SpawnCat(locationCF, parent)
 				-- [v4.8] Continuous Lock Check
 				-- [v4.23n] Ignore if already destroyed (Self-Cleanup Phase)
 				if targetFood and targetFood.Parent and FoodClaims[targetFood] ~= catId then
-					print(string.format("[AI] %s ABORT EATING. Lock stolen by %s", shortId, tostring(FoodClaims[targetFood])))
+					-- print(string.format("[AI] %s ABORT EATING. Lock stolen by %s", shortId, tostring(FoodClaims[targetFood])))
 					transitionToIdle("LockStolenWhileEating")
 					return 
 				end
 				
 				-- [v4.23z] Reverted to 5s (Middle ground)
 				if idleTimer >= 5.0 and targetFood and targetFood.Parent and FoodClaims[targetFood] == catId then
-					print(string.format("[AI] %s FINISHED EATING %s (%s)", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
+					-- print(string.format("[AI] %s FINISHED EATING %s (%s)", shortId, targetFood.Name, tostring(targetFood:GetAttribute("RefID"))))
 					
 					-- [v4.25m] CatTrap인 경우 파괴하지 않고 포획 신호 전달
 					if targetFood.Name == "CatTrap" then
@@ -2618,6 +2686,68 @@ function MapGenerator.SpawnCat(locationCF, parent)
 			
 		end
 	)
+	
+	return model
+end
+
+-- [New] Function to spawn a Yellow Cat with Pink Heart Textures
+function MapGenerator.spawnYellowPinkHeart(locationCF, parent)
+	-- 1. Spawn base cat
+	local catModel = MapGenerator.SpawnCat(locationCF, parent)
+	
+	if catModel then
+		-- 2. Apply Custom Appearance (Yellow + Pink Heart)
+		local torso = catModel:WaitForChild("Torso")
+		if torso then
+			-- Color all parts Yellow and remove Spots
+			for _, part in ipairs(catModel:GetChildren()) do
+				if part:IsA("BasePart") then
+					-- Remove random spots for clean look
+					if string.sub(part.Name, 1, 4) == "Spot" or part.Name == "ChestPatch" then
+						part:Destroy()
+					elseif part.Name == "EyeL" or part.Name == "EyeR" then
+						part.Color = Color3.fromRGB(60, 60, 60) -- Dark Grey Eyes
+					else
+						part.Color = Color3.fromRGB(255, 225, 120) -- Softer Yellow (Pastel)
+					end
+				end
+			end
+			
+			-- Add Texture Panels (Sides) to fix distortion
+			local function createTexturePanel(name, offsetCF, face)
+				local p = Instance.new("Part")
+				p.Name = name
+				p.Size = Vector3.new(0.01, 0.8, 0.8) -- Square aspect ratio
+				p.Transparency = 1 -- Invisible part, show decal only
+				p.CanCollide = false
+				p.Massless = true
+				p.CFrame = torso.CFrame * offsetCF
+				p.Parent = catModel
+				
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = torso
+				weld.Part1 = p
+				weld.Parent = p
+				
+				local decal = Instance.new("Decal")
+				decal.Texture = "rbxassetid://6578431534"
+				decal.Face = face
+				decal.Parent = p
+			end
+			
+			-- Left Side Panel (Face Left to point outward)
+			createTexturePanel("SidePanelL", CFrame.new(-0.51, 0, 0), Enum.NormalId.Left)
+			
+			-- Right Side Panel (Face Right to point outward)
+			createTexturePanel("SidePanelR", CFrame.new(0.51, 0, 0), Enum.NormalId.Right)
+		end
+		
+		-- 3. Print UUID (Name is "Cat_" + shortId)
+		MapGenerator.TargetCatUUID = catModel.Name -- Store as Target!
+		-- print("[SpecialCat] Spawned & Registered as TARGET: " .. catModel.Name .. " (UUID: " .. catModel.Name:sub(5) .. ")")
+	end
+	
+	return catModel
 end
 
 return MapGenerator

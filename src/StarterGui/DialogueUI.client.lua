@@ -408,6 +408,12 @@ local function showCurrentNode()
 	end
 	
 	local rawText = currentNode.Text or ""
+	
+	-- [Added] Text가 테이블(배열)이면 랜덤 선택
+	if type(rawText) == "table" then
+		rawText = rawText[math.random(1, #rawText)]
+	end
+	
 	local processedText = string.gsub(rawText, "{PlayerName}", player.DisplayName)
 	
 	-- 이전 선택지 제거

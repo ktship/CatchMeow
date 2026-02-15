@@ -4,12 +4,20 @@ local DialogueData = {
 		Nodes = {
 			["DH_IDLE_1"] = {
 				Speaker = "Player",
-				Text = "안녕하세요!",
+				Text = {
+					"안녕하세요!",
+					"계세요?",
+					"잠시만요, 할아버지!"
+				},
 				Next = "DH_IDLE_2"
 			},
 			["DH_IDLE_2"] = {
 				Speaker = "Grandpa",
-				Text = "(힐끗 쳐다보며) 무슨 일인가?",
+				Text = {
+					"(힐끗 쳐다보며) 무슨 일인가?",
+					"(귀찮은 듯) 또 누구야? 무슨 일로 왔나?",
+					"음? 낯선 얼굴이구먼. 무슨 일인가?"
+				},
 				Choices = {
 					{ Text = "혹시 근처에서 노란 고양이 못 보셨나요?", Next = "DH_IDLE_3" },
 					{ Text = "아무것도 아니에요...", Next = "DH_IDLE_3_ALT1" },
@@ -23,7 +31,11 @@ local DialogueData = {
 			},
 			["DH_IDLE_3_ALT1_1"] = {
 				Speaker = "Grandpa",
-				Text = "참 싱거운 친구구먼.",
+				Text = {
+					"참 싱거운 친구구먼.",
+					"바쁜 사람 붙잡고 뭐하는 겐가.",
+					"허허, 심심하면 다른 데 가서 놀게나."
+				},
 				Next = nil -- 대화 종료
 			},
 			["DH_IDLE_3_ALT2"] = {
@@ -33,7 +45,11 @@ local DialogueData = {
 			},
 			["DH_IDLE_3_ALT2_1"] = {
 				Speaker = "Grandpa",
-				Text = "(먼 산을 보며) 보면 모르나? 그냥 앉아서 쉬는 중이지.",
+				Text = {
+					"(먼 산을 보며) 보면 모르나? 그냥 앉아서 쉬는 중이지.",
+					"그냥 세월을 낚고 있다네. 신경 쓰지 말게.",
+					"햇볕이 좋아서 광합성 중이야. 늙으면 이런 게 낙이지."
+				},
 				Next = nil
 			},
 			["DH_IDLE_3"] = {

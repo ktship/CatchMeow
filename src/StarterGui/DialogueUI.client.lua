@@ -19,6 +19,13 @@ local selectChoiceEvent = dialogueSystem:WaitForChild("SelectChoice")
 -- [Added] 퀘스트 매니저 연동
 local QuestManager = require(ReplicatedStorage:WaitForChild("QuestSystem"):WaitForChild("QuestManager"))
 
+-- [Added] NPC 이름 Localization 테이블
+local NPCNames = {
+	["Grandpa"] = "앉아있는 노인",
+	["Chef"] = "요리사",
+	["Cat_"] = "고양이", -- Prefix 매칭용 예시
+}
+
 -- UI 요소 생성
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "DialogueUI"
@@ -392,7 +399,9 @@ local function showCurrentNode()
 		nameLabel.Text = player.DisplayName
 		updateCameraFocus(player.Character) 
 	else
-		nameLabel.Text = speakerName
+		-- [Modified] Localization 적용
+		local displayName = NPCNames[speakerName] or speakerName
+		nameLabel.Text = displayName
 		updateCameraFocus(currentNPC) 
 	end
 	

@@ -36,8 +36,22 @@ local DialogueManager
     StartDialogue 핸들러
     - 클라이언트가 NPC와 대화를 시도할 때 호출됨
 ]=]
+
+-- [Added] Reverse Lookup for NPC Names (Display Name -> Key)
+local function getNPCKeyFromDisplayName(displayName)
+	for key, name in pairs(NPCNames) do
+		if name == displayName then
+			return key
+		end
+	end
+	return displayName -- 매핑되지 않으면 그대로 반환
+end
+
 startDialogueFunc.OnServerInvoke = function(player, npcName)
-	-- print("[DialogueServer] " .. player.Name .. " requested dialogue with " .. npcName)
+	-- [Fixed] 클라이언트가 Display Name을 보내줄 수도 있으므로 Key로 변환
+	local realNPCName = getNPCKeyFromDisplayName(npcName)
+	
+	-- print("[DialogueServer] " .. player.Name .. " requested dialogue with " .. npcName .. " (Key: " .. realNPCName .. ")")
 	
 	if not DialogueManager then
 		local module = dialogueSystemFolder:FindFirstChild("DialogueManager")
@@ -49,7 +63,7 @@ startDialogueFunc.OnServerInvoke = function(player, npcName)
 		end
 	end
 	
-	return DialogueManager.StartDialogue(player, npcName)
+	return DialogueManager.StartDialogue(player, realNPCName)
 end
 
 --[=[

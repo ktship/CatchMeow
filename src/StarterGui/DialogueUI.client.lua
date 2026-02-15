@@ -295,7 +295,9 @@ local function endDialogue()
 	if not isDialogueActive then return end
 	
 	if currentNode and currentNode.Notification then
-		showNotification(currentNode.NotificationTitle, currentNode.Notification)
+		-- [Modified] StartQuest가 있으면 "새로운 퀘스트", 아니면 "알림" (또는 데이터의 Title 사용)
+		local defaultTitle = currentNode.StartQuest and "새로운 퀘스트" or "알림"
+		showNotification(currentNode.NotificationTitle or defaultTitle, currentNode.Notification)
 	end
 	
 	-- [Added] 대화 종료 시 퀘스트 시작 트리거 확인

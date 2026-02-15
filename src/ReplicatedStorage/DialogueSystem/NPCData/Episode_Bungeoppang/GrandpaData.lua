@@ -56,7 +56,6 @@ local DialogueData = {
 				Text = "하트 점? 글쎄... 정 찾고 싶으면 사진이라도 찍어와 봐. 아마 직접 보면 알겠지.",
 				SetState = "ST_PHOTO_NEED", -- 상태 변이 트리거
 				StartQuest = "FindYellowCat", -- [Added] 퀘스트 시작 트리거
-				NotificationTitle = "새로운 목표", 
 				Notification = "핑크색 하트 점이 있는 노란 고양이 사진 찍어오기", 
 				Next = nil
 			}

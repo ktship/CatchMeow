@@ -76,10 +76,11 @@ local DialogueData = {
 				Next = "DH_IDLE_6"
 			},
 			["DH_IDLE_6"] = {
-				Speaker = "Grandpa",
 				Text = "하트 점? 글쎄... 정 찾고 싶으면 사진이라도 찍어와 봐. 아마 직접 보면 알겠지.",
 				SetState = "ST_PHOTO_NEED", -- 상태 변이 트리거
 				StartQuest = "FindYellowCat", -- [Added] 퀘스트 시작 트리거
+				-- [Added] Set Target Attribute for Camera Tool validation
+				SetAttributes = { TargetCat = "Yellow" }, 
 				Notification = "핑크색 하트 점이 있는 노란 고양이 사진 찍어오기", 
 				Next = nil
 			}
@@ -332,11 +333,68 @@ local DialogueData = {
 				Next = nil
 			}
 		}
+	},
+
+	-- [Added] 사진 선택 틀렸을 때
+	["ST_PHOTO_WRONG"] = {
+		Nodes = {
+			["DH_WRONG_1"] = {
+				Speaker = "Grandpa",
+				Text = "음... 눈이 침침해서 잘 안 보이지만, 이건 내가 찾던 녀석이 아닌 것 같구먼.",
+				Next = "DH_WRONG_2"
+			},
+			["DH_WRONG_2"] = {
+				Speaker = "Grandpa",
+				Text = "분명 핑크색 하트 점이 있다고 했어. 다시 확인해주겠나?",
+				Next = nil,
+				ClearAttribute = "LastPhotoResult" -- [Added] 상태 초기화 (다시 시도 가능하도록)
+			}
+		}
+	},
+
+	-- [Added] 사진 선택 유도 상태 (갤러리에 사진이 있음)
+	["ST_PHOTO_HAVE"] = {
+		Nodes = {
+			["DH_HAVE_1"] = {
+				Speaker = "Grandpa",
+				Text = "오, 사진을 찍어왔는가? 어디 한번 보여주게나.",
+				Next = "DH_HAVE_2"
+			},
+			["DH_HAVE_2"] = {
+				Speaker = "Player",
+				Text = "", -- [Modified] 텍스트 없이 바로 앨범 오픈
+				Next = nil,
+				Action = "OPEN_GALLERY_SELECT" -- UI 액션: 갤러리 열기
+			}
+		}
 	}
 }
 
 -- [추가된 레이어] 상태 결정 로직
 function DialogueData.GetActualState(player, savedState)
+	-- 1. 사진 퀘스트 진행 중일 때 ("ST_PHOTO_NEED" 상태일 때)
+	if savedState == "ST_PHOTO_NEED" or savedState == "ST_PHOTO_WRONG" or savedState == "ST_PHOTO_HAVE" then
+		-- A. 가장 최근에 선택한 사진 결과 확인 (DialogueServer가 업데이트해둠)
+		local lastResult = player:GetAttribute("LastPhotoResult")
+		
+		if lastResult == "Success" then
+			return "ST_PHOTO_SUCCESS"
+		elseif lastResult == "Wrong" then
+			-- 틀렸으면 "틀렸다"는 대사 출력 (무조건)
+			return "ST_PHOTO_WRONG" 
+		end
+
+		-- B. 결과가 없거나(아직 안 보여줌) 오답 처리 후 다시 말을 걸었을 때
+		-- 사진이 한 장이라도 있는지 확인
+		local photoCount = player:GetAttribute("PhotoCount") or 0
+		
+		if photoCount > 0 then
+			return "ST_PHOTO_HAVE" -- "사진 있네? 보여줘"
+		else
+			return "ST_PHOTO_NEED" -- "사진 찍어와"
+		end
+	end
+
 	-- InventoryManager 참조 (서버 사이드 전제)
 	local invManager = _G.InventoryManager
 

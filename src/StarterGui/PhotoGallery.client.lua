@@ -44,7 +44,7 @@ openBtn.Name = "OpenGalleryBtn"
 openBtn.Size = UDim2.new(0, 50, 0, 50) -- [Modified] Reduced Size to match Inventory
 openBtn.Position = UDim2.new(0, 160, 1, -20)
 openBtn.AnchorPoint = Vector2.new(0, 1)
-openBtn.BackgroundColor3 = Color3.fromRGB(255, 240, 245) -- [Modified] 연한 핑크 (앨범 느낌)
+openBtn.BackgroundColor3 = Color3.fromRGB(255, 220, 100) -- [Modified] 통일된 색상 (InventoryButton과 동일)
 openBtn.Text = "🏞️" -- [Modified] 텍스트 제거, 아이콘 변경 (사진 느낌)
 openBtn.TextSize = 35 -- [Modified] Reduced Icon Size
 openBtn.Font = Enum.Font.GothamBold
@@ -157,7 +157,7 @@ end)
 local window = Instance.new("Frame")
 window.Name = "GalleryWindow"
 window.Size = UDim2.new(0, 600, 0, 500) -- [Modified] 조금 더 크게
-window.Position = UDim2.new(0.5, 0, 0.4, 0)
+window.Position = UDim2.new(0.5, 0, 0.45, 0) -- [Modified] Standardized Position
 window.AnchorPoint = Vector2.new(0.5, 0.5)
 window.BackgroundTransparency = 1
 window.Visible = false
@@ -296,13 +296,16 @@ closeBtn.MouseButton1Click:Connect(function()
 	backgroundBtn.Visible = false
 end)
 
+-- Modified Background Button Logic (Prevent closing in Select Mode)
 backgroundBtn.MouseButton1Click:Connect(function()
+	if screenGui:GetAttribute("SelectMode") then return end -- Prevent closing
 	window.Visible = false
 	backgroundBtn.Visible = false
 end)
 
 -- 2. Capture Logic
 local function createPhoto(data)
+	print("[PhotoGallery] Photo Captured! Processing visual...")
 	-- data can be a Target (old) or {CFrame, Position} (new)
 	if not data then return end
 	
@@ -472,38 +475,79 @@ local function createPhoto(data)
 		Duration = 2
 	})
 	
-	-- [Added] Click to Verify Log
-	-- Add Button covering the frame
-	local verifyBtn = Instance.new("TextButton")
-	verifyBtn.Name = "VerifyBtn"
-	verifyBtn.Size = UDim2.new(1, 0, 1, 0)
-	verifyBtn.BackgroundTransparency = 1
-	verifyBtn.Text = ""
-	verifyBtn.Parent = photoFrame
+	-- SelectOverlay (선택 모드에서만 보임)
+	local selectOverlay = Instance.new("TextButton")
+	selectOverlay.Name = "SelectOverlay"
+	selectOverlay.Size = UDim2.new(1, 0, 1, 0)
+	selectOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	selectOverlay.BackgroundTransparency = 0.6
+	selectOverlay.Text = "선택하기"
+	selectOverlay.TextColor3 = Color3.fromRGB(255, 255, 255)
+	selectOverlay.TextSize = 24
+	selectOverlay.Font = Enum.Font.GothamBold
+	selectOverlay.Visible = screenGui:GetAttribute("SelectMode") == true
+	selectOverlay.Parent = photoFrame
 	
-	verifyBtn.MouseButton1Click:Connect(function()
-		local isMatch = photoFrame:GetAttribute("IsMatch")
-		-- local target = photoFrame:GetAttribute("Target")
-		local obj = photoFrame:GetAttribute("Object")
-		local col = photoFrame:GetAttribute("Color")
+	selectOverlay.MouseButton1Click:Connect(function()
+		if not screenGui:GetAttribute("SelectMode") then return end
 		
-		if obj then
-			local infoText = obj
-			if col then infoText = col .. " " .. infoText end
-			
-			if isMatch then
-				caption.Text = "✅ " .. infoText
-				caption.TextColor3 = Color3.fromRGB(0, 180, 0) -- Green
-			else
-				caption.Text = "📷 " .. infoText
-				caption.TextColor3 = Color3.fromRGB(50, 50, 50) -- Dark Grey
+		local isMatch = photoFrame:GetAttribute("IsMatch")
+		local target = photoFrame:GetAttribute("Target")
+		local obj = photoFrame:GetAttribute("Object")
+		
+		print("--- Photo Selected ---")
+		print("Object:", obj)
+		print("Target:", target)
+		print("IsMatch:", isMatch)
+		print("----------------------")
+		
+		-- Fire to Server
+		local events = ReplicatedStorage:FindFirstChild("Events")
+		if events then
+			local photoSelected = events:FindFirstChild("PhotoSelected")
+			if photoSelected then
+				photoSelected:FireServer(isMatch, target)
 			end
-		else
-			caption.Text = "❌ 식별된 오브젝트 없음"
-			caption.TextColor3 = Color3.fromRGB(200, 50, 50) -- Red
 		end
+		
+		-- Close Gallery and Reset Mode
+		window.Visible = false
+		backgroundBtn.Visible = false
+		screenGui:SetAttribute("SelectMode", nil)
 	end)
 end
+
+-- SelectMode 변경 감지
+screenGui:GetAttributeChangedSignal("SelectMode"):Connect(function()
+	local isSelectMode = screenGui:GetAttribute("SelectMode") == true
+	
+	-- UI 전환
+	openBtn.Visible = not isSelectMode
+	closeBtn.Visible = not isSelectMode
+	
+	if isSelectMode then
+		headerTitle.Text = "사진을 선택하세요"
+		header.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+		headerCover.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+		headerIcon.Text = "✅"
+	else
+		headerTitle.Text = "나의 앨범"
+		header.BackgroundColor3 = Colors.Primary
+		headerCover.BackgroundColor3 = Colors.Primary
+		headerIcon.Text = "🖼️"
+	end
+	
+	-- 오버레이 표시/숨김
+	for _, child in ipairs(scroller:GetChildren()) do
+		if child:IsA("Frame") then
+			local overlay = child:FindFirstChild("SelectOverlay")
+			if overlay then
+				overlay.Visible = isSelectMode
+			end
+		end
+	end
+end)
+
 
 -- Listen for Event
 local events = ReplicatedStorage:WaitForChild("Events", 10)
@@ -516,13 +560,11 @@ if events then
 	-- [Added] Listen for Verification Feedback and attach to latest photo
 	local photoFeedback = events:WaitForChild("PhotoFeedback", 10)
 	if photoFeedback then
-		photoFeedback.OnClientEvent:Connect(function(isMatch, target, objectName, colorName)
-			-- Find latest photo (Last child in scroller? Grid sorts by name? Frame names are default)
-			-- Usually newest is last added if Grid sorting is Default (LayoutOrder 0).
-			-- Check children count.
+		photoFeedback.OnClientEvent:Connect(function(isMatch, target, objectName)
+			print("[PhotoGallery] Feedback - Target:", target, "Object:", objectName, "IsMatch:", isMatch)
+			-- Find latest photo
 			local frames = scroller:GetChildren()
 			local latestFrame = nil
-			-- Filter for Frames only (ignore layout/constraints)
 			local photoFrames = {}
 			for _, child in ipairs(frames) do
 				if child:IsA("Frame") then
@@ -530,9 +572,6 @@ if events then
 				end
 			end
 			
-			-- Sort by Age? We just created it, so it's likely the last one found or inserted.
-			-- Let's assume the most recent child is the one.
-			-- Ideally we'd map ID, but for now assumption works if latency is low.
 			if #photoFrames > 0 then
 				latestFrame = photoFrames[#photoFrames]
 			end
@@ -541,8 +580,18 @@ if events then
 				latestFrame:SetAttribute("IsMatch", isMatch)
 				latestFrame:SetAttribute("Target", target)
 				latestFrame:SetAttribute("Object", objectName)
-				latestFrame:SetAttribute("Color", colorName)
-				-- print("Attached Verification Data to Photo")
+				
+				-- Update visual caption for feedback
+				local caption = latestFrame:FindFirstChild("TextLabel")
+				if caption then -- Assuming TextLabel is caption
+					if isMatch then
+						caption.Text = "✅ " .. (objectName or "Unknown")
+						caption.TextColor3 = Color3.fromRGB(0, 150, 0)
+					else
+						caption.Text = "📷 " .. (objectName or "Unknown")
+						caption.TextColor3 = Color3.fromRGB(50, 50, 50)
+					end
+				end
 			end
 		end)
 	end

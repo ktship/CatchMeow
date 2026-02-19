@@ -22,6 +22,11 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 	raycastParams.FilterDescendantsInstances = {player.Character}
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	
+	-- [Added] Photo Count Tracking for Dialogue
+	-- Increment regardless of what is hit, as Client saves every photo
+	local currentCount = player:GetAttribute("PhotoCount") or 0
+	player:SetAttribute("PhotoCount", currentCount + 1)
+	
 	local rayResult = workspace:Raycast(origin, direction * Config.Camera.Range, raycastParams)
 	
 	if rayResult then

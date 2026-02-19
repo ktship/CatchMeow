@@ -98,19 +98,22 @@ Tool.Activated:Connect(function()
 	
 	-- 2. 갤러리 저장 요청 (클라이언트 -> 클라이언트)
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
-	local events = ReplicatedStorage:FindFirstChild("Events")
+	local events = ReplicatedStorage:WaitForChild("Events", 10) -- [Fixed] WaitForChild
 	if events then
-		local takePhotoEvent = events:FindFirstChild("TakePhoto")
+		local takePhotoEvent = events:WaitForChild("TakePhoto", 10) -- [Fixed] WaitForChild
 		if takePhotoEvent then
+			print("[WeaponClient] Firing TakePhoto Event...") -- [Added] Debug
+			
 			-- Area Capture + FOV (Zoom)
 			local character = Player.Character
+			-- (Capture CFrame Logic)
 			local head = character and character:FindFirstChild("Head")
 			local captureCFrame
 			
 			if head then
 				captureCFrame = CFrame.lookAt(head.Position, Mouse.Hit.Position)
 			else
-				captureCFrame = CFrame.lookAt(workspace.CurrentCamera.CFrame.Position, Mouse.Hit.Position)
+				captureCFrame = workspace.CurrentCamera.CFrame
 			end
 			
 			-- Camera 2 has Zoom (Lower FOV)
@@ -124,9 +127,12 @@ Tool.Activated:Connect(function()
 				Position = captureCFrame.Position,
 				FOV = fov
 			})
-			
-			-- print("[Camera] Captured. FOV:", fov)
+			print("[WeaponClient] TakePhoto Event Fired!") 
+		else
+			warn("[WeaponClient] TakePhoto Event NOT found!")
 		end
+	else
+		warn("[WeaponClient] Events folder NOT found!")
 	end
 	
 	-- 3. 클라이언트 측 효과 (셔터 소리)

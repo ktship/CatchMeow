@@ -5,6 +5,7 @@ local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config
 local Debris = game:GetService("Debris")
 
 Remote.OnServerEvent:Connect(function(player, targetPosition)
+	print("[Photo Debug] OnServerEvent")
 	-- 기본 검증
 	if not player.Character or not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then return end
 	if player.Character:FindFirstChild(Config.Camera.Name) ~= Tool then return end
@@ -21,9 +22,17 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 	raycastParams.FilterDescendantsInstances = {player.Character}
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	
+	-- [Added] Photo Count Tracking for Dialogue
+	-- Increment regardless of what is hit, as Client saves every photo
+	local currentCount = player:GetAttribute("PhotoCount") or 0
+	player:SetAttribute("PhotoCount", currentCount + 1)
+	print("[Photo Debug] currentCount", currentCount)
+
 	local rayResult = workspace:Raycast(origin, direction * Config.Camera.Range, raycastParams)
-	
+
 	if rayResult then
+		print("[Photo Debug] rayResult")
+
 		-- 플래시 효과를 찍히는 쪽에 생성
 		local flashPart = Instance.new("Part")
 		flashPart.Size = Vector3.new(0.5, 0.5, 0.5)
@@ -46,51 +55,35 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 		local rootModel = hitPart:FindFirstAncestorOfClass("Model")
 		
 		if rootModel then
+			print("[Photo Debug] rootModel", rootModel)
+
 			local objectName = rootModel.Name
-			local colorName = rootModel:GetAttribute("ColorName")
 			local isMatch = false
 			local target = player:GetAttribute("TargetCat")
 			
-			-- 1. Identify Object
-			if objectName == "TrafficCar" then
-				objectName = "Car"
-				-- Try to find color
-				local body = rootModel:FindFirstChild("Body")
-				if body then
-					-- Simple Color mapping (Red, Blue, etc.)
-					-- For now, just use BrickColor name or generic "Car"
-					colorName = body.BrickColor.Name
-				end
-			elseif objectName == "Cat" then
-				-- Keep existing cat logic
-				if colorName == target then
-					isMatch = true
-				end
-			elseif objectName == "Grandpa" or objectName == "Bungeoppang" then
-				-- [Quest] Grandpa Photo Quest
-				local currentState = player:GetAttribute("ST_Grandpa")
-				if currentState == "ST_PHOTO_NEED" then
-					player:SetAttribute("ST_Grandpa", "ST_PHOTO_SUCCESS")
-					print("[WeaponServer] Quest Progress: " .. player.Name .. " photographed " .. objectName .. ". State updated to ST_PHOTO_SUCCESS")
-					isMatch = true -- Feedback success
-				end
+			-- UUID Check
+			local MapGenerator = require(game.ServerScriptService.MapGenerator)
+			local targetUUID = MapGenerator.TargetCatUUID
+			
+			-- Debug Logs
+			print("[Photo Debug] User:", player.Name)
+			print("[Photo Debug] Target:", target or "Nil")
+			print("[Photo Debug] Object:", objectName)
+			print("[Photo Debug] TargetUUID:", targetUUID or "Nil")
+			
+			-- ID Validation (유일한 매칭 로직)
+			if target and target == objectName then
+				isMatch = true
+				print(">> MATCH BY DIRECT ID!")
 			end
 			
-			-- [Added] Distance/Size Check
-			local dist = (rayResult.Position - origin).Magnitude
-			local maxDist = Config.Camera.VerificationDistance or 40
+			print("[Photo Debug] IsMatch Result:", isMatch)
+			print("---------------------------------")
 			
-			if dist > maxDist then
-				-- If it's a quest item but too far, maybe don't invalidate completely but warn?
-				-- For now, consistent with existing logic:
-				isMatch = false
-				objectName = objectName .. " (Too Far/Small)"
-			end
-			
-			-- 2. Send Feedback (Log Mode)
+			-- Send Feedback
 			local feedbackEvent = game.ReplicatedStorage.Events:FindFirstChild("PhotoFeedback")
 			if feedbackEvent then
-				feedbackEvent:FireClient(player, isMatch, target, objectName, colorName)
+				feedbackEvent:FireClient(player, isMatch, target, objectName)
 			end
 		end
 	end

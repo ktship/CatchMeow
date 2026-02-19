@@ -62,11 +62,12 @@ local function onCharacterAdded(player, character)
 	end
 	
 	-- [Mission] Assign Target Cat Color
-	if Config.CatColors then
-		local mission = Config.CatColors[math.random(1, #Config.CatColors)].Name
-		player:SetAttribute("TargetCat", mission)
-		-- print("Mission Assigned: Find " .. mission .. " Cat!")
-	end
+	-- [Fixed] Disabled to prevent overwriting Quest Target (Grandpa Quest)
+	-- if Config.CatColors then
+	-- 	local mission = Config.CatColors[math.random(1, #Config.CatColors)].Name
+	-- 	player:SetAttribute("TargetCat", mission)
+	-- 	-- print("Mission Assigned: Find " .. mission .. " Cat!")
+	-- end
 	
 	-- 팀 색상 의류 적용 예시 (간단하게 상의 색상 변경)
 	for _, part in pairs(character:GetChildren()) do

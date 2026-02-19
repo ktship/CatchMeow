@@ -76,8 +76,8 @@ btnCorner.Parent = invButton
 -- 메인 프레임 (투명 컨테이너)
 local invWindow = Instance.new("Frame")
 invWindow.Name = "InventoryWindow"
-invWindow.Size = UDim2.new(0, 320, 0, 400) -- [Modified] 퀘스트창과 유사한 비율
-invWindow.Position = UDim2.new(0.5, 0, 0.4, 0) -- [Modified] 화면 중앙보다 약간 위 (카메라 아이콘 겹침 방지)
+invWindow.Size = UDim2.new(0, 320, 0, 500) -- [Modified] Standardized Height
+invWindow.Position = UDim2.new(0.5, 0, 0.45, 0) -- [Modified] Standardized Position
 invWindow.AnchorPoint = Vector2.new(0.5, 0.5)
 invWindow.BackgroundTransparency = 1
 invWindow.Visible = false

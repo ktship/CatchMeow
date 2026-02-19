@@ -79,13 +79,88 @@ selectChoiceEvent.OnServerEvent:Connect(function(player, npcName, choiceData)
 		-- print("[DialogueServer] Updated state for " .. player.Name .. " (" .. tostring(npcName) .. ") -> " .. tostring(choiceData.SetState))
 	end
 
-	-- 아이템 지급 예시 (GrandpaData에는 Action 필드가 없지만 확장성을 위해)
+	-- 아이템 지급 예시
 	if choiceData.Action == "GiveItem" and choiceData.ItemID then
 		if _G.InventoryManager then
 			_G.InventoryManager.AddItem(player, choiceData.ItemID, choiceData.Amount or 1)
 		end
 	end
+	
+	-- [Added] 속성 초기화 기능 (예: LastPhotoResult)
+	if choiceData.ClearAttribute then
+		player:SetAttribute(choiceData.ClearAttribute, nil)
+	end
+	
+	-- [Added] 임의 속성 설정 기능 (SetAttributes = {Key = Value})
+	if choiceData.SetAttributes then
+		for key, value in pairs(choiceData.SetAttributes) do
+			-- [Revised] Dynamic ID Resolution for "Yellow"
+			if key == "TargetCat" and value == "Yellow" then
+				local MapGenerator = require(game.ServerScriptService.MapGenerator)
+				if MapGenerator.TargetCatUUID then
+					value = MapGenerator.TargetCatUUID
+					print("[DialogueServer] Resolved 'Yellow' to UUID: " .. tostring(value))
+				else
+					warn("[DialogueServer] TargetCatUUID is nil in MapGenerator!")
+				end
+			end
+			
+			player:SetAttribute(key, value)
+			-- print("[DialogueServer] Set Attribute: " .. key .. " = " .. tostring(value) .. " for " .. player.Name)
+		end
+	end
 end)
+
+local photoSelectedEvent = dialogueSystemFolder:FindFirstChild("PhotoSelected")
+if not photoSelectedEvent then
+	-- [Modified] Check global Events folder too as PhotoGallery might use that
+	-- Ensure "Events" folder exists
+	local events = ReplicatedStorage:FindFirstChild("Events")
+	if not events then
+		events = Instance.new("Folder")
+		events.Name = "Events"
+		events.Parent = ReplicatedStorage
+	end
+	
+	photoSelectedEvent = events:FindFirstChild("PhotoSelected")
+	if not photoSelectedEvent then
+		photoSelectedEvent = Instance.new("RemoteEvent")
+		photoSelectedEvent.Name = "PhotoSelected"
+		photoSelectedEvent.Parent = events
+	end
+end
+
+
+
+local showDialogueEvent = dialogueSystemFolder:FindFirstChild("ShowDialogue")
+if not showDialogueEvent then
+	showDialogueEvent = Instance.new("RemoteEvent")
+	showDialogueEvent.Name = "ShowDialogue"
+	showDialogueEvent.Parent = dialogueSystemFolder
+end
+
+if photoSelectedEvent then
+	photoSelectedEvent.OnServerEvent:Connect(function(player, isMatch, target)
+		-- Update Player Attribute for GrandpaData
+		if isMatch then
+			player:SetAttribute("LastPhotoResult", "Success")
+			-- print("[DialogueServer] Photo MATCH! Player: " .. player.Name)
+		else
+			player:SetAttribute("LastPhotoResult", "Wrong")
+			-- print("[DialogueServer] Photo WRONG! Player: " .. player.Name)
+		end
+		
+		-- Re-trigger Dialogue with Grandpa
+		-- Instead of just calling StartDialogue (which returns data but does nothing with it here),
+		-- We explicitely get the data and send it to the client via ShowDialogue event.
+		local result = DialogueManager.StartDialogue(player, "Grandpa")
+		
+		if result and showDialogueEvent then
+			print("[DialogueServer] Re-opening dialogue via ShowDialogue event")
+			showDialogueEvent:FireClient(player, result.NPCName, result)
+		end
+	end)
+end
 
 
 --[=[

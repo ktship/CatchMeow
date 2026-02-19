@@ -35,6 +35,7 @@ if not takePhotoEvent then
 	takePhotoEvent = Instance.new("BindableEvent")
 	takePhotoEvent.Name = "TakePhoto"
 	takePhotoEvent.Parent = eventsFolder
+	print("[GameManager] Created 'TakePhoto' BindableEvent")
 end
 
 -- PhotoFeedback RemoteEvent (Server-to-Client)

@@ -8,16 +8,37 @@ local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config
 local isEquipped = false
 local isTakingPhoto = false
 
+local cameraGui = nil
+
 Tool.Equipped:Connect(function()
 	isEquipped = true
 	Mouse.Icon = "rbxasset://textures/Cursors/Crosshair.png"
 	
-	-- Camera2: NO Flashlight (Removed per user request)
+	-- Create Camera Overlay
+	local pGui = Player:FindFirstChild("PlayerGui")
+	if pGui then
+		cameraGui = Instance.new("ScreenGui")
+		cameraGui.Name = "CameraOverlay"
+		cameraGui.ResetOnSpawn = false
+		cameraGui.Parent = pGui
+		
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(1, 0, 1, 0)
+		frame.BackgroundTransparency = 1
+		frame.Parent = cameraGui
+		
+		-- [Removed] Icon and Text per user request
+	end
 end)
 
 Tool.Unequipped:Connect(function()
 	isEquipped = false
 	Mouse.Icon = ""
+	
+	if cameraGui then
+		cameraGui:Destroy()
+		cameraGui = nil
+	end
 	
 	-- Turn off Flashlight
 	local light = Handle:FindFirstChild("Flashlight")

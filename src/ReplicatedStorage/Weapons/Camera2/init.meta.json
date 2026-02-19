@@ -1,6 +1,7 @@
 {
     "className": "Tool",
     "properties": {
-        "RequiresHandle": true
+        "RequiresHandle": true,
+        "TextureId": "rbxassetid://16060788318"
     }
 }

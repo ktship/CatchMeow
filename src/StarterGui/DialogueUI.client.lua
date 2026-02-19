@@ -511,8 +511,40 @@ local function showCurrentNode()
 		nextIndicator.Visible = true
 	end
 	
+	-- [Modified] Handle State Changes & Attribute Clearing efficiently
+	local updateData = {}
 	if currentNode.SetState then
-		selectChoiceEvent:FireServer(currentDialogueData.NPCName, {SetState = currentNode.SetState})
+		updateData.SetState = currentNode.SetState
+	end
+	if currentNode.ClearAttribute then
+		updateData.ClearAttribute = currentNode.ClearAttribute
+	end
+	-- [Added] Set arbitrary attributes
+	if currentNode.SetAttributes then
+		updateData.SetAttributes = currentNode.SetAttributes
+	end
+	
+	if next(updateData) then
+		selectChoiceEvent:FireServer(currentDialogueData.NPCName, updateData)
+	end
+	
+	-- [Added] Gallery Selection Action
+	if currentNode.Action == "OPEN_GALLERY_SELECT" then
+		mainFrame.Visible = false
+		local pGui = player:WaitForChild("PlayerGui")
+		local galleryGui = pGui:FindFirstChild("PhotoGalleryGui")
+		if galleryGui then
+			galleryGui.Enabled = true
+			local galleryWindow = galleryGui:FindFirstChild("GalleryWindow", true)
+			if galleryWindow then
+				galleryWindow.Visible = true
+				galleryGui:SetAttribute("SelectMode", true)
+				local bgBtn = galleryGui:FindFirstChild("BackgroundButton")
+				if bgBtn then bgBtn.Visible = true end
+			end
+		else
+			warn("[DialogueUI] PhotoGalleryGui NOT found!")
+		end
 	end
 end
 
@@ -536,15 +568,18 @@ proceedToNext = function(overrideNextId)
 end
 
 -- 대화 시작 메인 함수
-local function startDialogue(npcName, npcModel)
-	if isDialogueActive then return end
-	local result = startDialogueFunc:InvokeServer(npcName)
-	if not result then warn("Failed to start dialogue with " .. npcName) return end
+-- 대화 데이터 처리 및 UI 표시 (공통 로직)
+local function processDialogueData(result)
+	if not result then return end
 	
 	isDialogueActive = true
 	currentDialogueData = result.DialogueData
-	currentDialogueData.NPCName = result.NPCName or npcName
-	currentNPC = npcModel or workspace:FindFirstChild(npcName, true)
+	currentDialogueData.NPCName = result.NPCName or "Unknown"
+	
+	-- NPC 모델 찾기 (이미 설정된 경우 패스)
+	if not currentNPC then
+		currentNPC = workspace:FindFirstChild(currentDialogueData.NPCName, true)
+	end
 	
 	if not currentDialogueData or not currentDialogueData.Nodes then
 		endDialogue()
@@ -607,6 +642,42 @@ local function startDialogue(npcName, npcModel)
 	else
 		endDialogue()
 	end
+end
+
+-- 대화 시작 메인 함수 (클라이언트 주도)
+local function startDialogue(npcName, npcModel)
+	if isDialogueActive then return end
+	
+	-- 서버에 대화 요청
+	local result = startDialogueFunc:InvokeServer(npcName)
+	if not result then warn("Failed to start dialogue with " .. npcName) return end
+	
+	-- 모델 설정
+	currentNPC = npcModel or workspace:FindFirstChild(npcName, true)
+	
+	-- 데이터 처리 위임
+	processDialogueData(result)
+end
+
+-- [Added] 서버 주도 대화 시작 (예: 사진 보여준 후)
+local showDialogueEvent = dialogueSystem:WaitForChild("ShowDialogue")
+if showDialogueEvent then
+	showDialogueEvent.OnClientEvent:Connect(function(npcName, dialogueDataResult)
+		-- 서버에서 이미 데이터가 넘어옴
+		-- npcName: Grandpa
+		-- dialogueDataResult: { NPCName="Grandpa", State=..., DialogueData=... }
+		
+		print("[DialogueUI] Received ShowDialogue event for " .. npcName)
+		
+		-- 강제로 대화 시작하므로 활성 상태 체크 무시하거나 초기화
+		-- [Modified] Don't call endDialogue() here as it schedules a hide task that kills the UI later.
+		-- processDialogueData handles state update safely.
+		
+		-- 모델 찾기 (컨텍스트가 끊겼을 수 있음)
+		currentNPC = workspace:FindFirstChild(npcName, true)
+		
+		processDialogueData(dialogueDataResult)
+	end)
 end
 
 -- 입력 처리

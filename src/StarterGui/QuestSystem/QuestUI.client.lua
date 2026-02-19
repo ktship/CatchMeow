@@ -200,7 +200,7 @@ listPadding.Parent = scrollFrame
 -- 사이드 메뉴 컨테이너 (화면 왼쪽 하단)
 local menuContainer = Instance.new("Frame")
 menuContainer.Name = "MenuContainer"
-menuContainer.Size = UDim2.new(0, 60, 0, 300)
+menuContainer.Size = UDim2.new(0, 50, 0, 300) -- [Modified] Width 60 -> 50 for consistent spacing
 menuContainer.Position = UDim2.new(0, 20, 1, -20) -- 왼쪽 하단 여백 20
 menuContainer.AnchorPoint = Vector2.new(0, 1) -- 좌측 하단 기준
 menuContainer.BackgroundTransparency = 1

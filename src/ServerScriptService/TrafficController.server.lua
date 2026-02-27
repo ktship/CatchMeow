@@ -116,12 +116,13 @@ end
 
 -- Game Status Check
 local gameStatus = ReplicatedStorage:WaitForChild("GameStatus")
+local MAX_CARS = 3 -- 최대 동시 차량 수 (성능 보호)
 
 -- Interval Loop: Spawn every 5 seconds
 task.spawn(function()
 	while true do
-		-- Only spawn if game is in progress
-		if gameStatus.Value == "Game in Progress" then
+		-- Only spawn if game is in progress AND under car limit
+		if gameStatus.Value == "Game in Progress" and #carsFolder:GetChildren() < MAX_CARS then
 			spawnCar()
 		end
 		-- Random spawn interval: 4 to 8 seconds

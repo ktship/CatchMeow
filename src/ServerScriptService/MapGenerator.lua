@@ -1376,6 +1376,60 @@ function MapGenerator.CreateBuilding(x, y, z, parent, roofColorOverride)
 		wallColor = Color3.fromRGB(255, 255, 255)
 	end
 	
+	-- 이 집이 빨간 지붕이라면 상점(Shop)으로 취급
+	local isShop = (roofColor == Color3.fromRGB(180, 40, 40) or roofColor == Color3.fromRGB(255, 0, 0))
+	
+	if isShop then
+		-- Toolbox 모델 로드 대신 로컬 에셋 (ReplicatedStorage.Items.shop) 복제
+		local shopTemplate = game:GetService("ReplicatedStorage"):FindFirstChild("Items") and game:GetService("ReplicatedStorage").Items:FindFirstChild("shop")
+		
+		if shopTemplate then
+			local shopModel = shopTemplate:Clone()
+			
+			-- 기본 모델에 포함된 불필요한 ProximityPrompt(링 등) 모두 일괄 제거
+			for _, child in ipairs(shopModel:GetDescendants()) do
+				if child:IsA("ProximityPrompt") then
+					child:Destroy()
+				end
+			end
+			
+			shopModel.Name = "Shop"
+			shopModel.Parent = parent
+			
+			local cf, size = shopModel:GetBoundingBox()
+			-- y는 지면(바닥)이라고 가정하고, 모델 높이의 절반을 더해 줍니다.
+			-- 도로를 마주보도록 225도 회전을 적용합니다.
+			shopModel:PivotTo(CFrame.new(x, y + size.Y/2, z) * CFrame.Angles(0, math.rad(225), 0))
+			
+			-- 문(상호작용) 투명 파트 생성 (상점 정면 방향)
+			-- 파트 위치도 회전된 방향을 기준으로 앞으로(또는 뒤로) 나오도록 계산합니다.
+			-- 180도 돌린 상태라면 모델의 기존 Z기준 '뒤쪽'이 앞(도로)이 됩니다.
+			local doorPart = Instance.new("Part")
+			doorPart.Name = "EntranceHitbox"
+			doorPart.Size = Vector3.new(12, 10, 5)
+			doorPart.CFrame = shopModel:GetPivot() * CFrame.new(0, -size.Y/2 + 5, -size.Z/3) -- 앞쪽 근처, 지면 높이
+			doorPart.Anchored = true
+			doorPart.CanCollide = false
+			doorPart.Transparency = 1
+			doorPart.Parent = shopModel
+			
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "DialoguePrompt"
+			prompt.ActionText = "대화하기"
+			prompt.ObjectText = "Shop"
+			prompt.RequiresLineOfSight = false
+			prompt.MaxActivationDistance = 15
+			prompt.Parent = doorPart
+			
+			game:GetService("CollectionService"):AddTag(doorPart, "ShopDoor")
+			
+			return shopModel
+		else
+			warn("[MapGenerator] ReplicatedStorage.Items.shop 에셋을 찾을 수 없어 상점 배치를 건너뜁니다.")
+		end
+		-- 로드 실패 시 그냥 일반 집을 생성하도록 넘어감
+	end
+	
 	local windowColor = Color3.fromRGB(100, 150, 200) -- 파란 창문
 	local doorColor = Color3.fromRGB(80, 50, 30) -- 갈색 문
 	
@@ -1429,7 +1483,18 @@ function MapGenerator.CreateBuilding(x, y, z, parent, roofColorOverride)
 	end
 	
 	-- 문 (앞면 중앙)
-	createPart("Door", Vector3.new(4, 6, 0.5), Vector3.new(x, y + 3, z - houseDepth/2 - 0.2), doorColor, Enum.Material.Wood, model)
+	local door = createPart("Door", Vector3.new(4, 6, 0.5), Vector3.new(x, y + 3, z - houseDepth/2 - 0.2), doorColor, Enum.Material.Wood, model)
+	
+	-- 집 입장용 ProximityPrompt 추가
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "들어가기"
+	prompt.ObjectText = "집"
+	prompt.RequiresLineOfSight = false
+	prompt.MaxActivationDistance = 8
+	prompt.Parent = door
+	
+	-- 서버 연동을 위해 태그 부착 
+	game:GetService("CollectionService"):AddTag(door, "HouseDoor")
 	
 	-- 굴뚝 (랜덤 위치)
 	local chimneySize = Vector3.new(2, 5, 2)

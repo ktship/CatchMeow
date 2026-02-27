@@ -100,9 +100,16 @@ spawn(function()
 end)
 
 local function onPlayerAdded(player)
-	-- 팀 배정 제거됨 (TeamManager Removed)
-	-- if TeamManager then... end
+	-- leaderstats (재화 시스템) 추가
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
 	
+	local coin = Instance.new("IntValue")
+	coin.Name = "Coin"
+	coin.Value = 100 -- 초기 지급 금액
+	coin.Parent = leaderstats
+
 	player.CharacterAdded:Connect(function(character)
 		onCharacterAdded(player, character)
 	end)
@@ -122,6 +129,24 @@ local function Initialize()
 	end
 	
 	Players.PlayerAdded:Connect(onPlayerAdded)
+	
+	-- 테스트 코인 추가 이벤트 생성 및 수신 연결
+	local testCoinEvent = ReplicatedStorage:FindFirstChild("AddTestCoin")
+	if not testCoinEvent then
+		testCoinEvent = Instance.new("RemoteEvent")
+		testCoinEvent.Name = "AddTestCoin"
+		testCoinEvent.Parent = ReplicatedStorage
+	end
+	
+	testCoinEvent.OnServerEvent:Connect(function(player)
+		local leaderstats = player:FindFirstChild("leaderstats")
+		if leaderstats then
+			local coin = leaderstats:FindFirstChild("Coin")
+			if coin then
+				coin.Value = coin.Value + 100
+			end
+		end
+	end)
 end
 
 -- 스크립트로 실행될 경우 자동 초기화, 모듈로 사용될 경우 함수 반환

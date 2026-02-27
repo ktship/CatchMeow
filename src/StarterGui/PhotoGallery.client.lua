@@ -7,7 +7,7 @@ local player = Players.LocalPlayer
 local itemOffset = 0 -- For ScrollingFrame layout
 
 -- 1. Create UI
--- print("--- [PhotoGallery] STARTING UI CREATION ---")
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PhotoGalleryGui"
 screenGui.ResetOnSpawn = false
@@ -22,7 +22,7 @@ for _, child in ipairs(player.PlayerGui:GetChildren()) do
 	end
 end
 
--- print("--- [PhotoGallery] ScreenGui Created in PlayerGui ---")
+
 
 -- [Theme Colors] Sunny Orange (QuestUI/InventoryUI와 통일)
 local Colors = {
@@ -305,7 +305,7 @@ end)
 
 -- 2. Capture Logic
 local function createPhoto(data)
-	print("[PhotoGallery] Photo Captured! Processing visual...")
+
 	-- data can be a Target (old) or {CFrame, Position} (new)
 	if not data then return end
 	
@@ -495,11 +495,7 @@ local function createPhoto(data)
 		local target = photoFrame:GetAttribute("Target")
 		local obj = photoFrame:GetAttribute("Object")
 		
-		print("--- Photo Selected ---")
-		print("Object:", obj)
-		print("Target:", target)
-		print("IsMatch:", isMatch)
-		print("----------------------")
+
 		
 		-- Fire to Server
 		local events = ReplicatedStorage:FindFirstChild("Events")
@@ -561,7 +557,7 @@ if events then
 	local photoFeedback = events:WaitForChild("PhotoFeedback", 10)
 	if photoFeedback then
 		photoFeedback.OnClientEvent:Connect(function(isMatch, target, objectName)
-			print("[PhotoGallery] Feedback - Target:", target, "Object:", objectName, "IsMatch:", isMatch)
+
 			-- Find latest photo
 			local frames = scroller:GetChildren()
 			local latestFrame = nil

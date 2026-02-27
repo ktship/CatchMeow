@@ -340,7 +340,7 @@ local function createPreviewModel(itemId)
 			highlight.Parent = model
 			
 			previewModel = model
-			-- print("[InventoryUI] Created Preview Model: " .. tostring(previewModel))
+
 			
 			-- [v4.23s] Visual Debug: Preview is GREEN
 			local highlight = Instance.new("Highlight")
@@ -353,7 +353,7 @@ local function createPreviewModel(itemId)
 			if handle then
 				-- 사용자 요청 정밀 각도 (-40.997, 175.114, -10.472)
 				handle.CFrame = CFrame.fromOrientation(math.rad(-40.997), math.rad(175.114), math.rad(-10.472))
-				-- print("[InventoryUI] Preview Init Rotation: " .. tostring(handle.Orientation))
+
 			end
 		else
 			-- Fallback
@@ -379,7 +379,7 @@ local function createPreviewModel(itemId)
 			
 			-- [충돌 감지용] 문을 올리기 전에 크기 측정
 			local size = part:GetExtentsSize()
-			print("[인벤토리] 덫 크기 측정: " .. tostring(size))
+
 			_G.TrapSize = size
 			
 			-- 3D Preview: Reset position to 0,0,0
@@ -495,7 +495,7 @@ end
 -- 프리뷰 제거 함수
 local function destroyPreviewModel()
 	if previewModel then
-		-- print("[InventoryUI] Destroying Preview Model: " .. tostring(previewModel))
+
 		previewModel:Destroy()
 		previewModel = nil
 	end
@@ -698,7 +698,7 @@ local function createSlot(index, itemId, count)
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then return end
 	
-	-- print("[InventoryUI] Creating slot for " .. itemId)
+
 	
 	local slot = Instance.new("TextButton")
 	slot.Name = "Slot_" .. index
@@ -729,7 +729,7 @@ local function createSlot(index, itemId, count)
 	slotViewport.Interactable = false
 	slotViewport.Parent = slot
 	
-	-- print("[InventoryUI] ViewportFrame created. Parent: " .. tostring(slotViewport.Parent))
+
 	
 	local slotCamera = Instance.new("Camera")
 	slotCamera.FieldOfView = 50 -- 조금 더 넓게
@@ -816,7 +816,7 @@ local function createSlot(index, itemId, count)
 				end
 			else
 				-- Part (BasePart) 처리 - 이제 AssetLoader에서 Part로 변환됨
-				print("[InventoryUI] Valid Bungeoppang Part found")
+
 				model.Name = "InventoryItem"
 				
 				-- 크기 초대형 확대 (6.0배)
@@ -1032,18 +1032,13 @@ mouse.Button1Down:Connect(function()
 	-- UI 위 클릭은 무시 (단, 사용 모드 힌트 UI는 제외)
 	local guiObjects = playerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y)
 	local realGuiCount = 0
-	local guiNames = {}
 	for _, obj in ipairs(guiObjects) do
 		-- useModeHint(힌트 텍스트), FadeFrame(화면 전환 효과용 전체 덮개) 무시
 		if obj ~= useModeHint and not obj:IsDescendantOf(useModeHint) and obj.Name ~= "FadeFrame" then
 			realGuiCount = realGuiCount + 1
-			table.insert(guiNames, obj.Name)
 		end
 	end
-	if realGuiCount > 0 then 
-		warn("[InventoryUI] 클릭 가로챔: ", table.concat(guiNames, ", "))
-		return 
-	end
+	if realGuiCount > 0 then return end
 	
 	-- 유효한 지면 클릭 확인
 	local mouseRay = mouse.UnitRay
@@ -1052,7 +1047,6 @@ mouse.Button1Down:Connect(function()
 	if result then
 		-- [충돌 감지] 설치 불가 상태면 무시
 		if not canPlace then
-			print("[인벤토리] 설치 불가 - 충돌 감지됨")
 			return
 		end
 		
@@ -1074,118 +1068,7 @@ invButton.MouseButton1Click:Connect(toggleInventory)
 closeBtn.MouseButton1Click:Connect(function()
 	setInventoryVisible(false) -- [v4.25k] 통합 함수 사용
 end)
--- [Debug] 아이템 회전 조절 UI
-local function createDebugUI()
-	local screen = Instance.new("ScreenGui")
-	screen.Name = "ItemRotationDebug"
-	screen.Parent = playerGui
-	
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0, 200, 0, 150)
-	frame.Position = UDim2.new(0.8, 0, 0.1, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	frame.BackgroundTransparency = 0.5
-	frame.Parent = screen
-	
-	local xVal, yVal, zVal = -90, 0, 0 -- 초기값 (기존 코드 기준)
-	
-	local function updateRotation()
-		local foundCount = 0
-		
-		-- [Debug] PlayerGui 전체를 뒤져서 모든 ViewportFrame의 아이템을 회전시킵니다.
-		local allDescendants = playerGui:GetDescendants()
-		for _, vp in ipairs(allDescendants) do
-			if vp:IsA("ViewportFrame") then
-				-- 카메라 제외한 실제 아이템(BasePart/Model) 찾기
-				local targetItem = nil
-				for _, child in ipairs(vp:GetChildren()) do
-					if (child:IsA("BasePart") or child:IsA("Model")) and not child:IsA("Camera") then
-						targetItem = child
-						break
-					end
-				end
-				
-				if targetItem then
-					foundCount = foundCount + 1
-					local cf = CFrame.new(0,0,0) * CFrame.Angles(math.rad(xVal), math.rad(yVal), math.rad(zVal))
-					if targetItem:IsA("Model") then
-						targetItem:PivotTo(cf)
-					elseif targetItem:IsA("BasePart") then
-						targetItem.CFrame = cf
-					end
-				end
-			end
-		end
-		
-		print(string.format("[Debug] Update Rotation: %.1f, %.1f, %.1f (Items Updated: %d)", xVal, yVal, zVal, foundCount))
-	end
-	
-	local function createControl(name, yPos, getter, setter)
-		local label = Instance.new("TextLabel")
-		label.Text = name
-		label.Size = UDim2.new(0.2, 0, 0, 30)
-		label.Position = UDim2.new(0, 5, 0, yPos)
-		label.TextColor3 = Color3.new(1,1,1)
-		label.BackgroundTransparency = 1
-		label.Parent = frame
-		
-		local minusBtn = Instance.new("TextButton")
-		minusBtn.Text = "-"
-		minusBtn.Size = UDim2.new(0, 30, 0, 30)
-		minusBtn.Position = UDim2.new(0.2, 5, 0, yPos)
-		minusBtn.Parent = frame
-		
-		local input = Instance.new("TextBox")
-		input.Text = tostring(getter())
-		input.Size = UDim2.new(0.3, -10, 0, 30)
-		input.Position = UDim2.new(0.4, 0, 0, yPos)
-		input.Parent = frame
-		
-		local plusBtn = Instance.new("TextButton")
-		plusBtn.Text = "+"
-		plusBtn.Size = UDim2.new(0, 30, 0, 30)
-		plusBtn.Position = UDim2.new(0.7, 5, 0, yPos)
-		plusBtn.Parent = frame
-		
-		local function update(val)
-			setter(val)
-			input.Text = tostring(val)
-			updateRotation()
-		end
-		
-		minusBtn.MouseButton1Click:Connect(function() update(getter() - 10) end)
-		plusBtn.MouseButton1Click:Connect(function() update(getter() + 10) end)
-		input.FocusLost:Connect(function()
-			local n = tonumber(input.Text)
-			if n then update(n) else input.Text = tostring(getter()) end
-		end)
 
-		return input
-	end
-	
-	local xInput = createControl("X", 10, function() return xVal end, function(v) xVal = v end)
-	local yInput = createControl("Y", 45, function() return yVal end, function(v) yVal = v end)
-	local zInput = createControl("Z", 80, function() return zVal end, function(v) zVal = v end)
-	
-	local resetBtn = Instance.new("TextButton")
-	resetBtn.Text = "RESET (-90,0,0)"
-	resetBtn.Size = UDim2.new(0.9, 0, 0, 30)
-	resetBtn.Position = UDim2.new(0.05, 0, 0, 115)
-	resetBtn.Parent = frame
-	resetBtn.MouseButton1Click:Connect(function()
-		xVal, yVal, zVal = -90, 0, 0
-		xInput.Text = "-90"; yInput.Text = "0"; zInput.Text = "0"
-		updateRotation()
-	end)
-	
-	updateRotation() -- 초기 적용
-	
-	-- [Fix] UI 갱신 시에도 회전값 적용되도록 글로벌 변수에 저장하여 접근
-	_G.DebugUpdateRotation = updateRotation
-end
-
--- [Debug] 실행 (필요 시 주석 해제하여 사용)
--- createDebugUI()
 
 updateEvent.OnClientEvent:Connect(function(newInventory)
 	if Config.Debug and Config.Debug.ShowLogs then
@@ -1197,18 +1080,6 @@ updateEvent.OnClientEvent:Connect(function(newInventory)
 	inventory = newInventory
 	refreshUI()
 	
-	-- [Debug] UI 갱신 후 회전값 다시 적용 (약간의 딜레이 필요할 수 있음)
-	if _G.DebugUpdateRotation then
-		task.delay(0.1, function()
-			_G.DebugUpdateRotation()
-		end)
-	end
-end)
-
--- [Added] Request initial data immediately on load to prevent race conditions
-if Config.Debug and Config.Debug.ShowLogs then
-	print("[InventoryUI] Requesting initial inventory...")
-end
 requestUpdateEvent:FireServer()
 
 if Config.Debug and Config.Debug.ShowLogs then

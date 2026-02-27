@@ -2,10 +2,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Players = game:GetService("Players")
 
--- [Added] NPC 이름 Localization 테이블 (서버 사이드)
 local NPCNames = {
 	["Grandpa"] = "앉아있는 노인",
 	["Chef"] = "요리사",
+	["Seller"] = "Shop", -- [Added] 프롬프트 텍스트 "Shop"을 "Seller" 모듈로 매핑
 }
 -- RemoteFunction 생성 및 설정
 local dialogueSystemFolder = ReplicatedStorage:FindFirstChild("DialogueSystem")

@@ -88,8 +88,14 @@ end
 
 -- [Fix] Handle Late Joiners
 Players.PlayerAdded:Connect(function(player)
-	wait(1) 
-	if player then player:LoadCharacter() end
+	task.wait(1.5) 
+	-- 로비나 마을 세팅 중에 들어온 접속자는 gameLoop의 respawnAll()에 의해 먼저 스폰될 것입니다.
+	-- Game in Progress 상태에서만 스폰시켜 중복 로딩(이중 이펙트, UI 두 번 초기화)을 방지합니다.
+	if statusValue.Value == "Game in Progress" then
+		if player and not player.Character then 
+			player:LoadCharacter() 
+		end
+	end
 end)
 
 -- 루프 시작

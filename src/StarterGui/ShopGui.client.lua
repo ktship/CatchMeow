@@ -553,4 +553,4 @@ for _, itemId in ipairs(shopItems) do
 	end
 end
 
-print("ShopGui Initialized")
+

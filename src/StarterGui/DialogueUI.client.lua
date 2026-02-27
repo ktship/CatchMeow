@@ -23,6 +23,7 @@ local QuestManager = require(ReplicatedStorage:WaitForChild("QuestSystem"):WaitF
 local NPCNames = {
 	["Grandpa"] = "앉아있는 노인",
 	["Chef"] = "요리사",
+	["Seller"] = "점원", -- [Added] 화면 표시용 이름
 	["Cat_"] = "고양이", -- Prefix 매칭용 예시
 }
 
@@ -355,7 +356,7 @@ end
 local function updateCameraFocus(targetModel)
 	if not targetModel then return end
 	
-	local head = targetModel:FindFirstChild("Head") or targetModel.PrimaryPart
+	local head = targetModel:FindFirstChild("Head") or targetModel.PrimaryPart or targetModel:FindFirstChildWhichIsA("BasePart", true)
 	local root = targetModel:FindFirstChild("HumanoidRootPart") 
 		or targetModel:FindFirstChild("Torso") 
 		or targetModel:FindFirstChild("UpperTorso") 
@@ -363,7 +364,7 @@ local function updateCameraFocus(targetModel)
 		or head 
 		
 	if not head or not root then 
-		warn("Cannot find Head or RootPart for camera focus on " .. targetModel.Name)
+		-- 모델에 파트가 아예 없으면 무시
 		return 
 	end
 	
@@ -484,10 +485,27 @@ local function showCurrentNode()
 				if isChoiceSelecting then return end 
 				isChoiceSelecting = true 
 				
-				if choice.Action then
-					selectChoiceEvent:FireServer(currentDialogueData.NPCName, {ChoiceIndex = i, Action = choice.Action})
+				local action = choice.Action
+				if action then
+					selectChoiceEvent:FireServer(currentDialogueData.NPCName, {ChoiceIndex = i, Action = action})
 				end
-				if choice.Next then proceedToNext(choice.Next) else endDialogue() end
+				
+				if choice.Next then 
+					proceedToNext(choice.Next) 
+				else 
+					endDialogue() 
+				end
+				
+				-- [Added] 클라이언트 액션 처리 (예: 상점 열기)
+				if action == "OPEN_SHOP_UI" then
+					local pGui = player:WaitForChild("PlayerGui")
+					local shopGui = pGui:FindFirstChild("ShopUIPanel")
+					if shopGui then
+						shopGui.Enabled = true
+					else
+						warn("[DialogueUI] ShopUIPanel 안 뜸")
+					end
+				end
 			end)
 			
 			-- 높이 계산
@@ -546,6 +564,8 @@ local function showCurrentNode()
 			warn("[DialogueUI] PhotoGalleryGui NOT found!")
 		end
 	end
+	
+	-- 삭제 (기존 버튼 클릭 로직으로 이동됨)
 end
 
 -- 다음 노드로 진행

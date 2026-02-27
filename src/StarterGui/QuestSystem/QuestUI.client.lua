@@ -11,6 +11,7 @@ local player = Players.LocalPlayer
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "QuestUI"
 screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true -- [Added] Roblox 상단 여백 제거
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 -- [Theme Colors] Sunny Orange
@@ -28,9 +29,9 @@ local Colors = {
 -- 메인 프레임 (투명 컨테이너)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 400, 0, 500) -- [Modified] 화면 중앙 배치 및 크기 확대
+mainFrame.Size = UDim2.new(0, 400, 1, -180) -- [Modified] 위아래 여백을 주는 방식
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5) -- [Modified] 중앙 기준
-mainFrame.Position = UDim2.new(0.5, 0, 0.45, 0) -- [Modified] Standardized Position
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0) -- [Modified] 정중앙 배치
 mainFrame.BackgroundTransparency = 1
 mainFrame.Visible = false 
 mainFrame.Parent = screenGui
@@ -482,4 +483,4 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 updateUI()
-print("QuestUI Redesigned Initialized")
+

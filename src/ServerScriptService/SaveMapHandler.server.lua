@@ -34,20 +34,18 @@ if not removeEvent then
 end
 
 saveEvent.OnServerEvent:Connect(function(player)
-	print("💾 [Debug] User requested Map Save/Export.")
+
 	
 	local data = MapGenerator.CurrentData
 	if not data then
-		warn("⚠️ No Map Data found in Cache! Generating now to export...")
+
 		data = MapGenerator.GenerateProcedural() -- Force regen if missing? Safety fallback.
 	end
 	
 	if data then
 		-- 1. Print JSON (for copy-paste)
 		local json = HttpService:JSONEncode(data)
-		print("----- [DEBUG] MAP DATA EXPORT START -----")
-		print(json)
-		print("----- [DEBUG] MAP DATA EXPORT END -----")
+
 		
 		-- 2. Force Save to DataStore (just in case)
 		local DataStoreService = game:GetService("DataStoreService")
@@ -58,9 +56,7 @@ saveEvent.OnServerEvent:Connect(function(player)
 		end)
 		
 		if success then
-			print("✅ [Debug] Forced Save to DataStore successful!")
-		else
-			warn("❌ [Debug] Failed to save to DataStore: " .. tostring(err))
+
 		end
 	end
 end)
@@ -81,20 +77,20 @@ plantEvent.OnServerEvent:Connect(function(player, position)
 		MapGenerator.SpawnTree(position.X, position.Y, position.Z, groundFolder, style)
 	end)
 	if not success then
-		warn("❌ Failed to spawn tree: " .. tostring(err))
+
 		-- Fallback to old name if something is really weird, or just error.
 	end
 	
 	-- Save to Data {4, x, y, z, style}
 	if MapGenerator.CurrentData then
 		table.insert(MapGenerator.CurrentData, {4, position.X, position.Y, position.Z, style})
-		print("🌲 Manually planted tree (Style " .. style .. ") at", position)
+
 	end
 end)
 
 removeEvent.OnServerEvent:Connect(function(player, position)
 	if not position then return end
-	print("🪓 Request to remove tree at", position)
+
 	
 	-- 1. Remove from Data (CurrentData)
 	if MapGenerator.CurrentData then
@@ -114,9 +110,7 @@ removeEvent.OnServerEvent:Connect(function(player, position)
 		
 		if targetIndex then
 			table.remove(MapGenerator.CurrentData, targetIndex)
-			print("✅ Removed tree from saved data.")
-		else
-			warn("⚠️ Could not find tree in saved data at that position (might be legacy or offset).")
+
 		end
 	end
 	
@@ -142,9 +136,7 @@ removeEvent.OnServerEvent:Connect(function(player, position)
 		
 		if closestTree then
 			closestTree:Destroy()
-			print("🗑️ Visual tree model destroyed.")
-		else
-			warn("⚠️ No visual tree model found near click.")
+
 		end
 	end
 end)

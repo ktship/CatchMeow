@@ -16,7 +16,7 @@ function DialogueManager.StartDialogue(player, npcName)
         npcName = "Grandpa"
     end
     
-    print("[DialogueManager] StartDialogue called for: " .. tostring(npcName))
+
 
     local npcDataFolder = ReplicatedStorage:FindFirstChild("DialogueSystem") and ReplicatedStorage.DialogueSystem:FindFirstChild("NPCData")
     
@@ -60,7 +60,7 @@ function DialogueManager.StartDialogue(player, npcName)
         actualState = npcModule.GetActualState(player, savedState)
     end
     
-    print("[DialogueManager] " .. player.Name .. " talks to " .. npcName .. " | Saved: " .. savedState .. " -> Actual: " .. actualState)
+
 
     -- 4. 대화 데이터 가져오기 (Dialogue 필드가 없으면 모듈 자체를 사용)
     local dialogueData
@@ -84,7 +84,7 @@ function DialogueManager.StartDialogue(player, npcName)
         DialogueData = dialogueData
     }
     
-    print("[DialogueManager] Returning data, NPCName: " .. tostring(result.NPCName))
+
     return result
 end
 

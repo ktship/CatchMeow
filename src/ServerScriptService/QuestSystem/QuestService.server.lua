@@ -63,7 +63,7 @@ acceptQuestEvent.OnServerEvent:Connect(function(player, questId)
 			})
 		end
 		
-		print(player.Name .. " accepted quest: " .. questId)
+
 		questUpdateEvent:FireClient(player, playerQuest) -- 클라이언트에 상태 전송
 	else
 		warn(player.Name .. " already has quest: " .. questId)
@@ -119,19 +119,19 @@ completeQuestEvent.OnServerEvent:Connect(function(player, questId)
             -- 예: 돈, 경험치, 아이템 지급
             if rewards.Money then
                 -- TODO: 플레이어 돈 증가
-                print("Rewarded " .. rewards.Money .. " money")
+
             end
              if rewards.Exp then
                 -- TODO: 경험치 증가
-                 print("Rewarded " .. rewards.Exp .. " exp")
+
             end
              if rewards.Item then
                 -- TODO: 아이템 지급
-                 print("Rewarded item: " .. rewards.Item)
+
             end
         end
 
-        print(player.Name .. " completed quest: " .. questId)
+
         questUpdateEvent:FireClient(player, playerQuest)
     end
 end)

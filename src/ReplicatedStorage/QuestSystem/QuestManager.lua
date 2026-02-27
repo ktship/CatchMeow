@@ -43,7 +43,7 @@ end
 questUpdateEvent.OnClientEvent:Connect(function(updatedQuests)
 	QuestManager.CurrentQuests = updatedQuests
 	-- UI 업데이트 이벤트 발생 등 추가 로직 필요
-	print("Quest Updated!", updatedQuests)
+
 end)
 
 return QuestManager

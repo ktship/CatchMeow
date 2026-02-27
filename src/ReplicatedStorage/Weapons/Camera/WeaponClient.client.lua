@@ -102,7 +102,7 @@ Tool.Activated:Connect(function()
 	if events then
 		local takePhotoEvent = events:WaitForChild("TakePhoto", 10) -- [Fixed] WaitForChild
 		if takePhotoEvent then
-			print("[WeaponClient] Firing TakePhoto Event...") -- [Added] Debug
+
 			
 			-- Area Capture + FOV (Zoom)
 			local character = Player.Character
@@ -129,10 +129,10 @@ Tool.Activated:Connect(function()
 			})
 			print("[WeaponClient] TakePhoto Event Fired!") 
 		else
-			warn("[WeaponClient] TakePhoto Event NOT found!")
+
 		end
 	else
-		warn("[WeaponClient] Events folder NOT found!")
+
 	end
 	
 	-- 3. 클라이언트 측 효과 (셔터 소리)

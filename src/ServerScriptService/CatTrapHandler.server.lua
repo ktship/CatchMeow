@@ -145,7 +145,7 @@ function CatTrap.new(model)
 	model:GetAttributeChangedSignal("CaptureSignal"):Connect(function()
 		local catId = model:GetAttribute("CaptureSignal")
 		if catId and self.CurrentState == States.SETTING then
-			print("[CatTrap] CAPTURE SIGNAL RECEIVED: " .. tostring(catId))
+
 			self:PerformCapture(catId)
 			model:SetAttribute("CaptureSignal", nil) -- 신호 리셋
 		end
@@ -428,7 +428,7 @@ function CatTrap:PerformCapture(targetCatId)
 	end
 
 	if targetCatModel then
-		print("[CatTrap] CAPTURING NPC (LIVE): " .. targetCatModel.Name)
+
 		
 		-- 1. NPC에 상태 부여
 		targetCatModel:SetAttribute("IsTrapped", true)

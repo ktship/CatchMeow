@@ -11,7 +11,7 @@ local RunService = game:GetService("RunService")
 -- Remove Default Loading Screen (Standard practice to prove RF is running)
 ReplicatedFirst:RemoveDefaultLoadingScreen()
 
--- print("ClientLoader running from ReplicatedFirst (Instant Disable)")
+
 
 -- 1. Disable New TextChatService (Instant)
 if TextChatService:FindFirstChild("ChatWindowConfiguration") then
@@ -43,7 +43,7 @@ task.spawn(function()
 		
 		if success then
 			-- Verification: Check if it stuck? (Optional, but usually pcall success is enough)
-			-- print("CoreGui Chat Disabled Successfully")
+
 		end
 		
 		task.wait(0.05) -- Very fast retry (20 times per sec)

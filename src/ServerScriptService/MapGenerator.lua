@@ -1,8 +1,8 @@
 -- MapGenerator.lua
 -- ServerScriptService에 위치해야 합니다.
--- print("[MapGenerator] SCRIPT START - Reading file...")
+
 -- 게임 시작 시 도시 맵을 생성합니다.
--- print("[MapGenerator] Loaded v4.27d (Faster Search + Steady FOV)")
+
 
 local HttpService = game:GetService("HttpService")
 
@@ -137,7 +137,7 @@ function MapGenerator.GenerateLobby()
 	local lobbyDepth = 160
 	local ceilingHeight = 60 -- Taller ceiling for grander feel
 	
-	-- print("Generating Grand Indoor Lobby (Expanded & Open)...")
+
 	
 	-- [Lighting Fix] Remove "Dazzling" Effects (Bloom, Glare)
 	MapGenerator.SetupLighting()
@@ -511,7 +511,7 @@ function MapGenerator.GenerateProcedural()
 	
 	repeat
 		attempts += 1
-		-- print("[SpecialCat] Checking spot... Attempt " .. attempts)
+
 		local cx = math.random(-24, -12) -- [Modified] User Specific Range (Near Stall)
 		local cz = math.random(5, 17)
 		local groundY = getHeight(cx, cz)
@@ -527,7 +527,7 @@ function MapGenerator.GenerateProcedural()
 			else
 				-- Hit something else (Wall, House, Tree, Stall, etc.)
 				safe = false
-				-- print("[SpecialCat] Hit Obstacle: " .. p.Name .. " (" .. p.Parent.Name .. ")")
+
 				break
 			end
 		end
@@ -535,12 +535,12 @@ function MapGenerator.GenerateProcedural()
 		if safe then
 			MapGenerator.spawnYellowPinkHeart(catCF, catsFolder)
 			placed = true
-			-- print("[SpecialCat] Placed safely at attempt " .. attempts)
+
 		end
 	until placed or attempts >= 20
 	
 	if not placed then
-		warn("[SpecialCat] Failed to find safe spot after 20 attempts. Spawning at backup.")
+
 		local cx = math.random(-24, -12) 
 		local cz = math.random(5, 17)
 		local groundY = getHeight(cx, cz)
@@ -571,7 +571,7 @@ function MapGenerator.GenerateProcedural()
 end
 
 function MapGenerator.LoadMapFromData(mapData)
-	-- print("Loading Map from DataStore...")
+
 	MapGenerator.ClearMap()
 	MapGenerator.CurrentData = mapData -- Cache loaded data too
 
@@ -793,9 +793,9 @@ function MapGenerator.SpawnGrandpa(locationCF, parent)
 		-- 3. Animation
 		playSitAnim(model)
 		
-		-- print("[MapGenerator] Spawned Grandpa (Rigged) at CFrame.")
+
 	else
-		warn("[MapGenerator] Grandpa model not found in ReplicatedStorage.NPCs")
+
 	end
 end
 

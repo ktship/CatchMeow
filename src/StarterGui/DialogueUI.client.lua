@@ -503,7 +503,7 @@ local function showCurrentNode()
 					if shopGui then
 						shopGui.Enabled = true
 					else
-						warn("[DialogueUI] ShopUIPanel 안 뜸")
+
 					end
 				end
 			end)
@@ -561,7 +561,7 @@ local function showCurrentNode()
 				if bgBtn then bgBtn.Visible = true end
 			end
 		else
-			warn("[DialogueUI] PhotoGalleryGui NOT found!")
+
 		end
 	end
 	
@@ -670,7 +670,7 @@ local function startDialogue(npcName, npcModel)
 	
 	-- 서버에 대화 요청
 	local result = startDialogueFunc:InvokeServer(npcName)
-	if not result then warn("Failed to start dialogue with " .. npcName) return end
+	if not result then return end
 	
 	-- 모델 설정
 	currentNPC = npcModel or workspace:FindFirstChild(npcName, true)
@@ -687,7 +687,7 @@ if showDialogueEvent then
 		-- npcName: Grandpa
 		-- dialogueDataResult: { NPCName="Grandpa", State=..., DialogueData=... }
 		
-		print("[DialogueUI] Received ShowDialogue event for " .. npcName)
+
 		
 		-- 강제로 대화 시작하므로 활성 상태 체크 무시하거나 초기화
 		-- [Modified] Don't call endDialogue() here as it schedules a hide task that kills the UI later.
@@ -733,4 +733,4 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(promp
 	end
 end)
 
-print("DialogueUI Initialized (Unified Card Design)")
+

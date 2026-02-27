@@ -106,7 +106,7 @@ Tool.Activated:Connect(function()
 				FOV = fov
 			})
 			
-			-- print("[Camera] Captured. FOV:", fov)
+
 		end
 	end
 	

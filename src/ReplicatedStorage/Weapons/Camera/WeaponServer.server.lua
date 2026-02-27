@@ -5,7 +5,7 @@ local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config
 local Debris = game:GetService("Debris")
 
 Remote.OnServerEvent:Connect(function(player, targetPosition)
-	print("[Photo Debug] OnServerEvent")
+
 	-- 기본 검증
 	if not player.Character or not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then return end
 	if player.Character:FindFirstChild(Config.Camera.Name) ~= Tool then return end
@@ -26,12 +26,12 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 	-- Increment regardless of what is hit, as Client saves every photo
 	local currentCount = player:GetAttribute("PhotoCount") or 0
 	player:SetAttribute("PhotoCount", currentCount + 1)
-	print("[Photo Debug] currentCount", currentCount)
+
 
 	local rayResult = workspace:Raycast(origin, direction * Config.Camera.Range, raycastParams)
 
 	if rayResult then
-		print("[Photo Debug] rayResult")
+
 
 		-- 플래시 효과를 찍히는 쪽에 생성
 		local flashPart = Instance.new("Part")
@@ -55,7 +55,7 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 		local rootModel = hitPart:FindFirstAncestorOfClass("Model")
 		
 		if rootModel then
-			print("[Photo Debug] rootModel", rootModel)
+
 
 			local objectName = rootModel.Name
 			local isMatch = false
@@ -66,19 +66,15 @@ Remote.OnServerEvent:Connect(function(player, targetPosition)
 			local targetUUID = MapGenerator.TargetCatUUID
 			
 			-- Debug Logs
-			print("[Photo Debug] User:", player.Name)
-			print("[Photo Debug] Target:", target or "Nil")
-			print("[Photo Debug] Object:", objectName)
-			print("[Photo Debug] TargetUUID:", targetUUID or "Nil")
+
 			
 			-- ID Validation (유일한 매칭 로직)
 			if target and target == objectName then
 				isMatch = true
-				print(">> MATCH BY DIRECT ID!")
+
 			end
 			
-			print("[Photo Debug] IsMatch Result:", isMatch)
-			print("---------------------------------")
+
 			
 			-- Send Feedback
 			local feedbackEvent = game.ReplicatedStorage.Events:FindFirstChild("PhotoFeedback")

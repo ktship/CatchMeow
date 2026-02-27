@@ -38,13 +38,13 @@ local function addItem(player, itemId, count)
 	count = count or 1
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then 
-		warn("[InventoryManager] Unknown Item ID: " .. tostring(itemId))
+
 		return false 
 	end
 	
 	local inv = PlayerInventories[player]
 	if not inv then 
-		warn("[InventoryManager] No inventory for player: " .. player.Name)
+
 		return false 
 	end
 	
@@ -111,8 +111,8 @@ local function useItem(player, slotIndex)
 			
 			-- 효과음이나 파티클 등을 추가하면 더 좋음
 		else
-			warn("Cannot summon trap. Character or TrapModel missing.")
-			return -- 아이템 소모 방지
+		return 
+
 		end
 	else
 		-- 기타 효과 처리 필요 시 추가
@@ -139,7 +139,7 @@ local function buyItem(player, itemId)
 		coin.Value = coin.Value - itemDef.Price
 		addItem(player, itemId, 1)
 	else
-		warn("[InventoryManager] " .. player.Name .. " tried to buy " .. itemId .. " without enough coins.")
+
 	end
 end
 
@@ -153,7 +153,6 @@ local function setupWorldItem(itemPart, itemId, clickDetector)
 	clickDetector.MouseClick:Connect(function(player)
 		-- [v4.3] Block pickup if being eaten by a cat
 		if itemPart:GetAttribute("EatingBy") then
-			warn("[InventoryManager] Item is being eaten and cannot be picked up.")
 			return 
 		end
 		
@@ -301,7 +300,7 @@ placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstan
 			updateEvent:FireClient(player, inv)
 			return
 		else
-			warn("[InventoryManager] CatTrap asset NOT FOUND in Assets or Workspace!")
+
 		end
 	end
 	

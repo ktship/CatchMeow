@@ -99,7 +99,7 @@ selectChoiceEvent.OnServerEvent:Connect(function(player, npcName, choiceData)
 				local MapGenerator = require(game.ServerScriptService.MapGenerator)
 				if MapGenerator.TargetCatUUID then
 					value = MapGenerator.TargetCatUUID
-					print("[DialogueServer] Resolved 'Yellow' to UUID: " .. tostring(value))
+
 				else
 					warn("[DialogueServer] TargetCatUUID is nil in MapGenerator!")
 				end
@@ -156,7 +156,7 @@ if photoSelectedEvent then
 		local result = DialogueManager.StartDialogue(player, "Grandpa")
 		
 		if result and showDialogueEvent then
-			print("[DialogueServer] Re-opening dialogue via ShowDialogue event")
+
 			showDialogueEvent:FireClient(player, result.NPCName, result)
 		end
 	end)

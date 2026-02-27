@@ -1079,9 +1079,8 @@ updateEvent.OnClientEvent:Connect(function(newInventory)
 	end
 	inventory = newInventory
 	refreshUI()
-	
+end)
+
 requestUpdateEvent:FireServer()
 
-if Config.Debug and Config.Debug.ShowLogs then
-	print("[InventoryUI] Initialized")
-end
+

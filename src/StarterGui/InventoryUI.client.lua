@@ -35,6 +35,7 @@ local canPlace = true -- [충돌 감지] 설치 가능 여부
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "InventoryGui"
 screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true -- [Added] Roblox 상단바 (TopBar) 무시하고 화면 전체에 딱 맞춤
 screenGui.Parent = playerGui
 
 -- [Theme Colors] Sunny Orange (QuestUI와 통일)
@@ -76,8 +77,8 @@ btnCorner.Parent = invButton
 -- 메인 프레임 (투명 컨테이너)
 local invWindow = Instance.new("Frame")
 invWindow.Name = "InventoryWindow"
-invWindow.Size = UDim2.new(0, 320, 0, 500) -- [Modified] Standardized Height
-invWindow.Position = UDim2.new(0.5, 0, 0.45, 0) -- [Modified] Standardized Position
+invWindow.Size = UDim2.new(0, 320, 1, -180) -- [Modified] 위아래 90px씩 여백 (총 180px 제외)
+invWindow.Position = UDim2.new(0.5, 0, 0.5, 0) -- [Modified] 정중앙 배치
 invWindow.AnchorPoint = Vector2.new(0.5, 0.5)
 invWindow.BackgroundTransparency = 1
 invWindow.Visible = false
@@ -433,22 +434,62 @@ local function createPreviewModel(itemId)
 		
 		previewModel = part
 	else
-		local part = Instance.new("Part")
-		part.Name = "ItemPreview"
-		part.Size = Vector3.new(0.5, 0.5, 0.5)
-		part.Color = Color3.fromRGB(150, 150, 150)
-		part.Anchored = true
-		part.CanCollide = false
-		part.Parent = workspace
+		local items = ReplicatedStorage:FindFirstChild("Items")
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local sourceItem = (items and items:FindFirstChild(itemId)) or (assets and assets:FindFirstChild(itemId))
 		
-		local highlight = Instance.new("Highlight")
-		highlight.FillTransparency = 0.5
-		highlight.FillColor = Color3.fromRGB(200, 200, 200)
-		highlight.OutlineTransparency = 0
-		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-		highlight.Parent = part
+		if sourceItem then
+			local cloned = sourceItem:Clone()
+			
+			if cloned:IsA("Accessory") then
+				local handle = cloned:FindFirstChild("Handle")
+				if handle then
+					handle.Parent = nil
+					cloned:Destroy()
+					cloned = handle
+				end
+			end
+			
+			cloned.Name = "ItemPreview"
+			
+			for _, desc in ipairs(cloned:GetDescendants()) do
+				if desc:IsA("BasePart") then
+					desc.Anchored = true
+					desc.CanCollide = false
+				end
+			end
+			if cloned:IsA("BasePart") then
+				cloned.Anchored = true
+				cloned.CanCollide = false
+			end
+			
+			cloned.Parent = workspace
+			local highlight = Instance.new("Highlight")
+			highlight.FillTransparency = 0.5
+			highlight.FillColor = Color3.fromRGB(255, 220, 150)
+			highlight.OutlineTransparency = 0
+			highlight.Parent = cloned
+			previewModel = cloned
+		end
 		
-		previewModel = part
+		if not previewModel then
+			local part = Instance.new("Part")
+			part.Name = "ItemPreview"
+			part.Size = Vector3.new(0.5, 0.5, 0.5)
+			part.Color = Color3.fromRGB(150, 150, 150)
+			part.Anchored = true
+			part.CanCollide = false
+			part.Parent = workspace
+			
+			local highlight = Instance.new("Highlight")
+			highlight.FillTransparency = 0.5
+			highlight.FillColor = Color3.fromRGB(200, 200, 200)
+			highlight.OutlineTransparency = 0
+			highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+			highlight.Parent = part
+			
+			previewModel = part
+		end
 	end
 end
 
@@ -852,10 +893,51 @@ local function createSlot(index, itemId, count)
 			part.Parent = slotViewport
 		end
 	else
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(1.5, 1.5, 1.5) -- 3배 확대
-		part.Color = Color3.fromRGB(150, 150, 150)
-		part.Parent = slotViewport
+		local items = ReplicatedStorage:FindFirstChild("Items")
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local sourceItem = (items and items:FindFirstChild(itemId)) or (assets and assets:FindFirstChild(itemId))
+
+		if sourceItem then
+			local model = sourceItem:Clone()
+			
+			if model:IsA("Accessory") then
+				local handle = model:FindFirstChild("Handle")
+				if handle then
+					handle.Parent = nil
+					model:Destroy()
+					model = handle
+				end
+			end
+			
+			model.Name = "InventoryItem"
+			
+			if model:IsA("Model") then
+				for _, desc in ipairs(model:GetDescendants()) do
+					if desc:IsA("BasePart") then desc.Anchored = true end
+				end
+				model:PivotTo(CFrame.new(Vector3.zero))
+			elseif model:IsA("BasePart") then
+				model.Anchored = true
+				model.CFrame = CFrame.new(Vector3.zero)
+			end
+			
+			model.Parent = slotViewport
+			
+			-- adjust camera to fit
+			local maxDim = 2
+			if model:IsA("Model") then
+				local size = model:GetExtentsSize()
+				maxDim = math.max(size.X, size.Y, size.Z)
+			elseif model:IsA("BasePart") then
+				maxDim = math.max(model.Size.X, model.Size.Y, model.Size.Z)
+			end
+			slotCamera.CFrame = CFrame.new(Vector3.new(0, maxDim*0.2, maxDim*1.5), Vector3.zero)
+		else
+			local part = Instance.new("Part")
+			part.Size = Vector3.new(1.5, 1.5, 1.5) -- 3배 확대
+			part.Color = Color3.fromRGB(150, 150, 150)
+			part.Parent = slotViewport
+		end
 	end
 	
 	-- [New] ThumbnailCamera Support

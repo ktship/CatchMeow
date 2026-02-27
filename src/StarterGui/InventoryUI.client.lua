@@ -745,22 +745,7 @@ local function createSlot(index, itemId, count)
 	slotViewport.CurrentCamera = slotCamera
 	
 	-- 아이템별 3D 모델 생성 (월드 아이템과 동일한 비율)
-	if itemId == "Stick" then
-		local part = Instance.new("Part")
-		-- 월드 아이템 비율: 0.2 x 0.2 x 1.5 (가늘고 긴 막대)
-		part.Size = Vector3.new(0.15, 0.15, 1) -- 작게
-		part.Color = Color3.fromRGB(90, 60, 30)
-		part.Material = Enum.Material.Wood
-		-- 대각선으로 기울여서 잘 보이게
-		part.CFrame = CFrame.Angles(math.rad(30), math.rad(45), math.rad(20))
-		part.Parent = slotViewport
-	elseif itemId == "SpeedBoost" then
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(1, 2.5, 1) -- 3배 확대
-		part.Color = Color3.fromRGB(100, 200, 255)
-		part.Material = Enum.Material.Neon
-		part.Parent = slotViewport
-	elseif itemId == "Bungeoppang" then
+	if itemId == "Bungeoppang" then
 		-- 붕어빵 (From Assets)
 		local assets = ReplicatedStorage:WaitForChild("Assets", 5)
 		local sourceItem = assets and assets:FindFirstChild("Bungeoppang")
@@ -916,9 +901,17 @@ local function createSlot(index, itemId, count)
 					if desc:IsA("BasePart") then desc.Anchored = true end
 				end
 				model:PivotTo(CFrame.new(Vector3.zero))
+				-- CatCan, SpeedBoost: Z축 90도 회전 (상점과 동일)
+				if itemId == "CatCan" or itemId == "SpeedBoost" then
+					model:PivotTo(CFrame.new(Vector3.zero) * CFrame.Angles(0, 0, math.rad(90)))
+				end
 			elseif model:IsA("BasePart") then
 				model.Anchored = true
 				model.CFrame = CFrame.new(Vector3.zero)
+				-- CatCan, SpeedBoost: Z축 90도 회전 (상점과 동일)
+				if itemId == "CatCan" or itemId == "SpeedBoost" then
+					model.CFrame = CFrame.new(Vector3.zero) * CFrame.Angles(0, 0, math.rad(90))
+				end
 			end
 			
 			model.Parent = slotViewport

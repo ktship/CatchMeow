@@ -65,7 +65,7 @@ btnStroke.Parent = openBtn
 local saveBtn = Instance.new("TextButton")
 saveBtn.Name = "SaveMapBtn"
 saveBtn.Size = UDim2.new(0, 100, 0, 40)
-saveBtn.Position = UDim2.new(1, -120, 0, 10) -- Top Right
+saveBtn.Position = UDim2.new(1, -120, 0, 60) -- Top Right (Moved down)
 saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 saveBtn.Text = "Save Map 💾"
@@ -93,7 +93,7 @@ local isPlanting = false
 local plantBtn = Instance.new("TextButton")
 plantBtn.Name = "PlantTreeBtn"
 plantBtn.Size = UDim2.new(0, 40, 0, 40)
-plantBtn.Position = UDim2.new(1, -120, 0, 60)
+plantBtn.Position = UDim2.new(1, -120, 0, 110)
 plantBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
 plantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 plantBtn.Text = "🌲"
@@ -110,7 +110,7 @@ local isDeleting = false
 local deleteBtn = Instance.new("TextButton")
 deleteBtn.Name = "DeleteTreeBtn"
 deleteBtn.Size = UDim2.new(0, 40, 0, 40)
-deleteBtn.Position = UDim2.new(1, -170, 0, 60)
+deleteBtn.Position = UDim2.new(1, -170, 0, 110)
 deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 deleteBtn.Text = "🪓"
@@ -156,8 +156,8 @@ end)
 -- 메인 프레임 (투명 컨테이너)
 local window = Instance.new("Frame")
 window.Name = "GalleryWindow"
-window.Size = UDim2.new(0, 600, 0, 500) -- [Modified] 조금 더 크게
-window.Position = UDim2.new(0.5, 0, 0.45, 0) -- [Modified] Standardized Position
+window.Size = UDim2.new(0, 600, 1, -180) -- [Modified] 위아래 여백 유지 풀스크린
+window.Position = UDim2.new(0.5, 0, 0.5, 0) -- [Modified] 정중앙 배치
 window.AnchorPoint = Vector2.new(0.5, 0.5)
 window.BackgroundTransparency = 1
 window.Visible = false
@@ -199,7 +199,7 @@ headerIcon.Size = UDim2.new(0, 24, 0, 24)
 headerIcon.Position = UDim2.new(0, 15, 0.5, 0)
 headerIcon.AnchorPoint = Vector2.new(0, 0.5)
 headerIcon.BackgroundTransparency = 1
-headerIcon.Text = "🖼️"
+headerIcon.Text = "🏞️"
 headerIcon.Font = Enum.Font.GothamBold
 headerIcon.TextSize = 28
 headerIcon.TextColor3 = Color3.new(1, 1, 1)
@@ -534,7 +534,7 @@ screenGui:GetAttributeChangedSignal("SelectMode"):Connect(function()
 		headerTitle.Text = "나의 앨범"
 		header.BackgroundColor3 = Colors.Primary
 		headerCover.BackgroundColor3 = Colors.Primary
-		headerIcon.Text = "🖼️"
+		headerIcon.Text = "🏞️"
 	end
 	
 	-- 오버레이 표시/숨김

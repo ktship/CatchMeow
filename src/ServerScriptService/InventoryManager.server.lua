@@ -29,6 +29,10 @@ local buyEvent = Instance.new("RemoteEvent")
 buyEvent.Name = "BuyItem"
 buyEvent.Parent = eventsFolder
 
+local placeEvent = Instance.new("RemoteEvent")
+placeEvent.Name = "PlaceItem"
+placeEvent.Parent = eventsFolder
+
 -- 인벤토리에 아이템 추가
 local function addItem(player, itemId, count)
 	count = count or 1
@@ -138,16 +142,15 @@ local function buyItem(player, itemId)
 	local itemDef = ItemData.GetItem(itemId)
 	if not itemDef then return end
 	
-	-- TODO: 화폐 시스템 연동 (현재는 무료)
-	-- local stats = player:FindFirstChild("leaderstats")
-	-- if stats and stats.Coins.Value >= itemDef.Price then
-	--     stats.Coins.Value = stats.Coins.Value - itemDef.Price
-	--     addItem(player, itemId, 1)
-	-- end
+	local leaderstats = player:FindFirstChild("leaderstats")
+	local coin = leaderstats and leaderstats:FindFirstChild("Coin")
 	
-	-- 테스트: 무조건 지급
-	addItem(player, itemId, 1)
-	-- print(player.Name .. " bought " .. itemDef.Name)
+	if coin and coin.Value >= itemDef.Price then
+		coin.Value = coin.Value - itemDef.Price
+		addItem(player, itemId, 1)
+	else
+		warn("[InventoryManager] " .. player.Name .. " tried to buy " .. itemId .. " without enough coins.")
+	end
 end
 
 -- 월드 아이템 클릭 처리 (ClickDetector 사용)
@@ -226,12 +229,6 @@ requestUpdateEvent.OnServerEvent:Connect(function(player)
 end)
 
 -- 아이템 배치 (PlaceItem)
-local placeEvent = eventsFolder:FindFirstChild("PlaceItem")
-if not placeEvent then
-	placeEvent = Instance.new("RemoteEvent")
-	placeEvent.Name = "PlaceItem"
-	placeEvent.Parent = eventsFolder
-end
 
 placeEvent.OnServerEvent:Connect(function(player, slotIndex, position, hitInstance)
 	-- [v4.23q] Server-Side Debounce/Cooldown

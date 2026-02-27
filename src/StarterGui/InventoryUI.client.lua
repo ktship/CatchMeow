@@ -5,6 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -16,11 +17,9 @@ local events = ReplicatedStorage:WaitForChild("Events")
 local updateEvent = events:WaitForChild("UpdateInventory")
 local useEvent = events:WaitForChild("UseItem")
 
-local placeEvent = events:FindFirstChild("PlaceItem")
+local placeEvent = events:WaitForChild("PlaceItem", 10)
 if not placeEvent then
-	placeEvent = Instance.new("RemoteEvent")
-	placeEvent.Name = "PlaceItem"
-	placeEvent.Parent = events
+	warn("[InventoryUI] PlaceItem RemoteEvent not found!")
 end
 
 local requestUpdateEvent = events:WaitForChild("RequestInventoryUpdate")
@@ -691,6 +690,9 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
+-- [Fix] cancelUseMode 포워드 선언 (createSlot 내 ContextActionService 콜백에서 참조하기 위함)
+local cancelUseMode
+
 -- 슬롯 생성 함수
 local function createSlot(index, itemId, count)
 	local itemDef = ItemData.GetItem(itemId)
@@ -973,7 +975,7 @@ local function createSlot(index, itemId, count)
 		-- 사용 모드 진입
 		isUseMode = true
 		selectedSlot = index
-		useModeHint.Text = "🎯 " .. itemDef.Name .. " 배치할 곳 클릭 (ESC 취소)"
+		useModeHint.Text = "🎯 " .. itemDef.Name .. " 배치할 곳 클릭 (우클릭 취소)"
 		useModeHint.Visible = true
 		
 		-- 3D 월드 프리뷰 생성
@@ -1013,7 +1015,7 @@ local function toggleInventory()
 end
 
 -- 사용 모드 취소
-local function cancelUseMode()
+cancelUseMode = function()
 	isUseMode = false
 	selectedSlot = nil
 	useModeHint.Visible = false
@@ -1027,9 +1029,21 @@ end
 mouse.Button1Down:Connect(function()
 	if not isUseMode or not selectedSlot then return end
 	
-	-- UI 위 클릭은 무시
+	-- UI 위 클릭은 무시 (단, 사용 모드 힌트 UI는 제외)
 	local guiObjects = playerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y)
-	if #guiObjects > 0 then return end
+	local realGuiCount = 0
+	local guiNames = {}
+	for _, obj in ipairs(guiObjects) do
+		-- useModeHint(힌트 텍스트), FadeFrame(화면 전환 효과용 전체 덮개) 무시
+		if obj ~= useModeHint and not obj:IsDescendantOf(useModeHint) and obj.Name ~= "FadeFrame" then
+			realGuiCount = realGuiCount + 1
+			table.insert(guiNames, obj.Name)
+		end
+	end
+	if realGuiCount > 0 then 
+		warn("[InventoryUI] 클릭 가로챔: ", table.concat(guiNames, ", "))
+		return 
+	end
 	
 	-- 유효한 지면 클릭 확인
 	local mouseRay = mouse.UnitRay
@@ -1048,10 +1062,9 @@ mouse.Button1Down:Connect(function()
 	end
 end)
 
--- ESC로 사용 모드 취소
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
-	if input.KeyCode == Enum.KeyCode.Escape and isUseMode then
+-- [New Fix] 마우스 우클릭으로 사용 모드 취소 (Roblox 시스템상 ESC 차단 불가)
+mouse.Button2Down:Connect(function()
+	if isUseMode then
 		cancelUseMode()
 	end
 end)
